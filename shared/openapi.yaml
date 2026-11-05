@@ -1,0 +1,400 @@
+openapi: 3.1.0
+info:
+  title: Signature Trade Links API
+  version: 1.0.0-milestone-2
+  description: |
+    Contract v1 for the storefront, admin portal and backend. Implemented: public catalogue,
+    staff auth, catalogue/variant/inventory administration, staff management, settings, audit log.
+    Endpoints tagged `not-configured` exist in the contract but answer 503 `not_configured` until the
+    owner supplies the commercial and policy inputs they depend on.
+
+    Conventions
+    - Success: `{ "data": ..., "requestId": "req_..." }`. Error: `{ "error": { code, message, fieldErrors? }, "requestId" }`.
+    - Money is integer minor units (`...Minor`) plus an ISO 4217 `currency`. Never floats.
+    - Writes to versioned resources require `expectedVersion`; a mismatch returns 409 `stale_version`.
+    - Lists return `{ items, nextCursor }`; pass `nextCursor` back as `cursor`.
+    - Admin auth is a `stl_admin_session` HttpOnly SameSite=Strict cookie. Every admin write must send
+      `X-CSRF-Token` (from login/session) and JSON content; foreign `Origin` headers are rejected.
+servers:
+  - url: /api/v1
+tags:
+  - name: public
+  - name: admin-auth
+  - name: admin-catalogue
+  - name: admin-inventory
+  - name: admin-staff
+  - name: admin-operations
+  - name: not-configured
+components:
+  securitySchemes:
+    staffSession:
+      type: apiKey
+      in: cookie
+      name: stl_admin_session
+    csrf:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  parameters:
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1 } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_:-]{8,100}$' }
+      description: 'Replays with the same payload return the stored response (header Idempotent-Replayed: true); a different payload returns 409 idempotency_key_reused.'
+    Id: { name: id, in: path, required: true, schema: { type: string } }
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotConfigured:
+      description: Not available until owner inputs are supplied (code `not_configured`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error, requestId]
+      properties:
+        requestId: { type: string }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, invalid_json, unsupported_media_type, unauthenticated, invalid_credentials, forbidden, csrf_failed,
+                not_found, stale_version, conflict, invalid_transition, insufficient_stock, idempotency_key_reused, slug_locked,
+                currency_in_use, last_owner, payload_too_large, validation_failed, not_ready, commercial_setting_missing,
+                rate_limited, internal_error, not_configured]
+            message: { type: string, description: Customer-safe text }
+            fieldErrors: { type: object, additionalProperties: { type: string } }
+    Image:
+      type: object
+      required: [src, alt]
+      properties:
+        src: { type: string, description: 'Site path (/phone.jpg) or https URL' }
+        alt: { type: string }
+    Specification:
+      type: object
+      required: [label, value]
+      properties: { label: { type: string }, value: { type: string } }
+    Availability: { type: string, enum: [in_stock, out_of_stock, unconfirmed] }
+    Category:
+      type: object
+      properties: { id: { type: string }, slug: { type: string }, label: { type: string }, sortOrder: { type: integer } }
+    PublicProductSummary:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        tagline: { type: [string, 'null'] }
+        category: { type: object, properties: { id: { type: string }, slug: { type: string }, label: { type: string } } }
+        brand: { type: [string, 'null'] }
+        images: { type: array, items: { $ref: '#/components/schemas/Image' } }
+        illustration: { type: [string, 'null'], enum: [ac, washer, null] }
+        illustrative: { type: boolean, description: True for placeholder fixtures that are not real listings }
+        price:
+          type: [object, 'null']
+          description: Lowest confirmed price in the store currency; null until a price is confirmed
+          properties: { fromAmountMinor: { type: integer }, currency: { type: string }, varies: { type: boolean, description: True when variants have different prices } }
+        availability: { $ref: '#/components/schemas/Availability' }
+        hirePurchaseEnabled: { type: boolean }
+    PublicProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/PublicProductSummary'
+        - type: object
+          properties:
+            description: { type: string }
+            specifications: { type: array, items: { $ref: '#/components/schemas/Specification' } }
+            variants:
+              type: array
+              items:
+                type: object
+                properties:
+                  sku: { type: string }
+                  attributes: { type: object, additionalProperties: { type: string } }
+                  price: { type: object, properties: { amountMinor: { type: integer }, currency: { type: string } } }
+                  availability: { $ref: '#/components/schemas/Availability' }
+            purchaseModes:
+              type: object
+              properties:
+                retail: { type: object, properties: { available: { type: boolean }, reason: { type: string } } }
+                hirePurchase: { type: object, properties: { eligible: { type: boolean }, available: { type: boolean }, reason: { type: string } } }
+            policies: { type: array, items: { type: object }, description: Owner-approved policies; empty until supplied }
+    Staff:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        displayName: { type: string }
+        roles: { type: array, items: { type: string, enum: [owner, catalogue_manager, assessor, approver, finance, fulfilment] } }
+        permissions: { type: array, items: { type: string } }
+    Variant:
+      type: object
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        sku: { type: string }
+        attributes: { type: object, additionalProperties: { type: string } }
+        retailPriceMinor: { type: [integer, 'null'] }
+        currency: { type: [string, 'null'] }
+        active: { type: boolean }
+        stock: { $ref: '#/components/schemas/Stock' }
+        version: { type: integer }
+    Stock:
+      type: object
+      properties: { onHand: { type: integer }, reserved: { type: integer }, available: { type: integer } }
+    AdminProduct:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        tagline: { type: [string, 'null'] }
+        categoryId: { type: string }
+        brand: { type: [string, 'null'] }
+        specifications: { type: array, items: { $ref: '#/components/schemas/Specification' } }
+        images: { type: array, items: { $ref: '#/components/schemas/Image' } }
+        illustration: { type: [string, 'null'] }
+        publishStatus: { type: string, enum: [draft, published, archived] }
+        hirePurchaseEnabled: { type: boolean }
+        illustrative: { type: boolean }
+        variants: { type: array, items: { $ref: '#/components/schemas/Variant' } }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProductInput:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 80 }
+        title: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 4000 }
+        tagline: { type: [string, 'null'], maxLength: 60 }
+        categoryId: { type: string }
+        brand: { type: [string, 'null'], maxLength: 80 }
+        specifications: { type: array, maxItems: 40, items: { $ref: '#/components/schemas/Specification' } }
+        images: { type: array, maxItems: 12, items: { $ref: '#/components/schemas/Image' } }
+        illustration: { type: [string, 'null'], enum: [ac, washer, null] }
+paths:
+  /health:
+    get: { tags: [public], summary: Liveness, responses: { '200': { description: OK } } }
+  /categories:
+    get: { tags: [public], summary: Published categories in display order, responses: { '200': { description: OK } } }
+  /products:
+    get:
+      tags: [public]
+      summary: Published catalogue summaries
+      parameters:
+        - { name: category, in: query, schema: { type: string }, description: Category slug }
+        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: Case-insensitive search over title, description, brand and category }
+        - { name: hirePurchase, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: '`data: { items: PublicProductSummary[], nextCursor }`'
+        '422': { $ref: '#/components/responses/Error' }
+  /products/{slug}:
+    get:
+      tags: [public]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: '`data: PublicProductDetail`' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /admin/auth/login:
+    post:
+      tags: [admin-auth]
+      summary: Staff sign-in. Rate limited; identical error for unknown email and wrong password.
+      requestBody: { content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }
+      responses:
+        '200': { description: '`data: { staff: Staff, csrfToken }` and Set-Cookie' }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /admin/auth/session:
+    get: { tags: [admin-auth], security: [{ staffSession: [] }], responses: { '200': { description: '`data: { staff, csrfToken }`' }, '401': { $ref: '#/components/responses/Error' } } }
+  /admin/auth/logout:
+    post: { tags: [admin-auth], security: [{ staffSession: [], csrf: [] }], responses: { '204': { description: Signed out } } }
+  /admin/auth/accept-invite:
+    post:
+      tags: [admin-auth]
+      summary: Invited staff set a password (min 12 chars) with their one-time code
+      requestBody: { content: { application/json: { schema: { type: object, required: [email, token, password] } } } }
+      responses: { '204': { description: Account active }, '401': { $ref: '#/components/responses/Error' } }
+
+  /admin/categories:
+    get: { tags: [admin-catalogue], security: [{ staffSession: [] }], description: 'Permission catalogue:read', responses: { '200': { description: OK } } }
+    post:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      description: 'Permission catalogue:write. Body { slug, label, sortOrder, published }'
+      responses: { '201': { description: Created }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+  /admin/categories/{id}:
+    patch:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Partial update plus expectedVersion
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } }
+  /admin/products:
+    get:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, published, archived] } }
+        - { name: q, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses: { '200': { description: '`data: { items: AdminProduct[], nextCursor }`' } }
+    post:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      description: Creates a draft. slug, title and categoryId required.
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } } }
+      responses: { '201': { description: '`data: AdminProduct`' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+  /admin/products/{id}:
+    get: { tags: [admin-catalogue], security: [{ staffSession: [] }], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Error' } } }
+    patch:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Partial ProductInput plus expectedVersion. Slug is locked while published (409 slug_locked); a published product must stay publish-ready (422 not_ready).
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+  /admin/products/{id}/transitions:
+    post:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: |
+        Permission catalogue:publish. Body { action: publish|unpublish|archive|restore, expectedVersion, reason? }.
+        draft→published (publish, requires description, image or illustration, published category), published→draft (unpublish),
+        draft|published→archived (archive), archived→draft (restore).
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+  /admin/products/{id}/hire-purchase:
+    post:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Permission catalogue:hire_purchase (owner, approver). Body { enabled, expectedVersion, reason }.
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Error' } }
+  /admin/products/{id}/variants:
+    post:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: |
+        Body { sku, attributes?, retailPriceMinor?, currency?, active? }. Price and currency are set together, and only
+        after the owner sets store.currency (422 commercial_setting_missing); currency must equal it.
+      responses: { '201': { description: '`data: Variant`' }, '422': { $ref: '#/components/responses/Error' } }
+  /admin/variants/{id}:
+    patch:
+      tags: [admin-catalogue]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Partial { attributes, retailPriceMinor, currency, active } plus expectedVersion. SKU is immutable.
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } }
+
+  /admin/inventory:
+    get:
+      tags: [admin-inventory]
+      security: [{ staffSession: [] }]
+      parameters: [{ name: q, in: query, schema: { type: string } }]
+      responses: { '200': { description: '`data: { items: [{ variantId, sku, active, attributes, product, onHand, reserved, available }], nextCursor: null }`' } }
+  /admin/inventory/movements:
+    get:
+      tags: [admin-inventory]
+      security: [{ staffSession: [] }]
+      parameters: [{ name: sku, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: Newest first } }
+    post:
+      tags: [admin-inventory]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      description: |
+        Permission inventory:adjust. Body { sku, quantity (non-zero int), reason, note? }.
+        Reasons: stock_received (+), count_correction (±, note), damaged (−, note), returned_to_supplier (−), other (±, note).
+        Rejects with 409 insufficient_stock if on-hand would drop below reserved. Ledger rows are immutable.
+      responses: { '201': { description: '`data: { movement, stock }`' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+
+  /admin/staff:
+    get: { tags: [admin-staff], security: [{ staffSession: [] }], description: 'Permission staff:manage', responses: { '200': { description: OK } } }
+    post:
+      tags: [admin-staff]
+      security: [{ staffSession: [], csrf: [] }]
+      description: Body { email, displayName, roles[] }. Returns a one-time inviteToken (72 h) for the owner to share out of band. No messages are sent.
+      responses: { '201': { description: '`data: { staff, inviteToken, inviteExpiresAt }`' } }
+  /admin/staff/{id}/roles:
+    put:
+      tags: [admin-staff]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Body { roles[], expectedVersion }. Ends the target's sessions. Cannot leave zero active owners (409 last_owner).
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } }
+  /admin/staff/{id}/deactivate:
+    post:
+      tags: [admin-staff]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Body { expectedVersion, reason }. Not for your own account; never the last owner.
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } }
+  /admin/staff/{id}/invite:
+    post:
+      tags: [admin-staff]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      description: Reissue an invitation code for an invited account. Body { expectedVersion }.
+      responses: { '200': { description: OK } }
+
+  /admin/dashboard:
+    get: { tags: [admin-operations], security: [{ staffSession: [] }], description: Live database counts only, responses: { '200': { description: OK } } }
+  /admin/settings:
+    get: { tags: [admin-operations], security: [{ staffSession: [] }], description: 'Permission settings:manage', responses: { '200': { description: OK } } }
+  /admin/settings/{key}:
+    put:
+      tags: [admin-operations]
+      security: [{ staffSession: [], csrf: [] }]
+      parameters: [{ name: key, in: path, required: true, schema: { type: string, enum: [store.currency] } }]
+      description: Body { value (ISO 4217 or null), expectedVersion (0 if never set) }. 409 currency_in_use while variants are priced in another currency.
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' } }
+  /admin/audit-events:
+    get:
+      tags: [admin-operations]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: resourceType, in: query, schema: { type: string } }
+        - { name: resourceId, in: query, schema: { type: string } }
+        - { name: actorId, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses: { '200': { description: Newest first; append-only } }
+
+  /checkout/quote: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /orders: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /orders/{id}/payments: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/orders: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/orders/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /hire-purchase/applications: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/applications: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/applications/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/applications/{id}/information: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/applications/{id}/withdraw: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/offers/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/offers/{id}/accept: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/agreements/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /me/agreements/{id}/payments: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /uploads/assessment-intent: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /webhooks/{provider}: { post: { tags: [not-configured], parameters: [{ name: provider, in: path, required: true, schema: { type: string } }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/applications: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/applications/{id}/transitions: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/applications/{id}/offers: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/orders: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/payments: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }

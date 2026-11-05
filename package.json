@@ -1,0 +1,31 @@
+{
+  "name": "signature-trade-links",
+  "version": "1.0.0",
+  "description": "Signature Trade Links storefront, admin portal and backend API",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "api": "node --disable-warning=ExperimentalWarning backend/src/server.js",
+    "api:watch": "node --disable-warning=ExperimentalWarning --watch backend/src/server.js",
+    "admin:bootstrap": "node --disable-warning=ExperimentalWarning backend/scripts/bootstrap-owner.js",
+    "seed:fixtures": "node --disable-warning=ExperimentalWarning backend/scripts/seed-fixtures.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"backend/test/*.test.js\"",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "lucide-react": "^1.69.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.6"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
