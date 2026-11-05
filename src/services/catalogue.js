@@ -34,6 +34,7 @@ const fromSummary = p => ({
   categorySlug: p.category.slug,
   tag: p.tagline,
   brand: p.brand,
+  useCases: Array.isArray(p.useCases) ? p.useCases.filter(v => typeof v === 'string') : [],
   image: p.images[0]?.src,
   imageAlt: p.images[0]?.alt,
   illustration: p.illustration,
@@ -68,7 +69,8 @@ export async function loadProductDetail(slug, signal) {
   const detail = await get(`/products/${encodeURIComponent(slug)}`, signal);
   return {
     description: detail.description,
-    specifications: detail.specifications,
+    specifications: Array.isArray(detail.specifications) ? detail.specifications : [],
+    useCases: Array.isArray(detail.useCases) ? detail.useCases.filter(v => typeof v === 'string') : [],
     variants: detail.variants,
     retailAvailable: detail.purchaseModes.retail.available,
   };

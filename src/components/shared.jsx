@@ -1,9 +1,11 @@
 // Pieces both stores use: product media, the dialog shell, header, footer and the scroll reveal.
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Check, Menu, Search, ShoppingBag, X } from 'lucide-react';
+import { ArrowUpRight, Check, Heart, Menu, Search, ShoppingCart, X } from 'lucide-react';
 import BrandLogo from './BrandLogo';
-import { Link, navigate } from '../router';
-import { useBag, useCatalogue } from '../state';
+import { productMedia } from '../productMedia';
+import { PaymentBadges } from './PaymentMethods';
+import { Link, navigate, useLocation } from '../router';
+import { useBag, useCatalogue, useWishlist } from '../state';
 
 export function Appliance({ type }) {
   return (
@@ -16,8 +18,9 @@ export function Appliance({ type }) {
 }
 
 export function ProductImage({ product, eager = false }) {
-  return product.image
-    ? <img src={product.image} alt={product.imageAlt ?? product.name} loading={eager ? 'eager' : 'lazy'} fetchPriority={eager ? 'high' : 'auto'} />
+  const { src, studio } = productMedia(product);
+  return src
+    ? <img className={studio ? 'studio-product-image' : undefined} src={src} alt={product.imageAlt ?? product.name} loading={eager ? 'eager' : 'lazy'} fetchPriority={eager ? 'high' : 'auto'} decoding="async" />
     : <Appliance type={product.illustration} />;
 }
 
@@ -81,7 +84,7 @@ export function HelpDialog({ onClose }) {
         <p>The shop sells outright to anyone. Hire purchase is a separate store for customers our team has assessed and approved.</p>
       </div>
       <div className="row-actions">
-        <Link className="button dark" to="/" onClick={onClose}>Visit the shop <ArrowUpRight size={17} /></Link>
+        <Link className="button dark" to="/shop" onClick={onClose}>Visit the shop <ArrowUpRight size={17} /></Link>
         <Link className="button outline" to="/hire-purchase" onClick={onClose}>Hire purchase <ArrowUpRight size={17} /></Link>
       </div>
     </Modal>
@@ -101,25 +104,38 @@ export function PreviewStrip() {
   );
 }
 
+/** Heart that saves a product to the wishlist. */
+export function WishButton({ product, className = '' }) {
+  const { slugs, toggle } = useWishlist();
+  const saved = slugs.includes(product.slug);
+  return (
+    <button type="button" className={`wish-button ${saved ? 'saved' : ''} ${className}`} aria-pressed={saved} aria-label={`${saved ? 'Remove' : 'Save'} ${product.name} ${saved ? 'from' : 'to'} your wishlist`} onClick={() => toggle(product)}>
+      <Heart size={18} fill={saved ? 'currentColor' : 'none'} />
+    </button>
+  );
+}
+
 /** Retail header: shop navigation, search and the bag. */
 export function RetailHeader({ onHelp, onBag, query, onQuery }) {
   const { count } = useBag();
+  const wishCount = useWishlist().slugs.length;
   const [menu, setMenu] = useState(false);
   const [searchOpen, setSearchOpen] = useState(Boolean(query));
-  const shop = to => { setMenu(false); navigate(to); };
+  const { path } = useLocation();
   return (
     <>
       <header className="header">
         <BrandLogo />
         <nav className={menu ? 'nav expanded' : 'nav'} aria-label="Main navigation">
-          <button onClick={() => shop('/#shop')}>Shop all</button>
-          <button onClick={() => shop('/?category=home-appliances#shop')}>Home appliances</button>
+          <Link to="/shop" onClick={() => setMenu(false)} aria-current={path === '/shop' ? 'page' : undefined}>Shop all</Link>
+          <Link to="/shop/home-appliances" onClick={() => setMenu(false)} aria-current={path === '/shop/home-appliances' ? 'page' : undefined}>Home appliances</Link>
           <Link to="/hire-purchase" onClick={() => setMenu(false)}>Hire purchase <span className="nav-dot" /></Link>
           <button onClick={() => { setMenu(false); onHelp(); }}>Help & support</button>
         </nav>
         <div className="header-actions">
           <button className="icon-button" aria-label="Search products" aria-expanded={searchOpen} onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => document.getElementById('search')?.focus(), 0); }}><Search size={21} /></button>
-          <button className="bag-button" aria-label={`Open shopping bag, ${count} items`} onClick={onBag}><ShoppingBag size={20} /><span>{count}</span></button>
+          <Link className="icon-button wish-link" to="/wishlist" aria-label={`Wishlist, ${wishCount} saved`}><Heart size={20} />{wishCount > 0 && <span>{wishCount}</span>}</Link>
+          <button className="bag-button" aria-label={`Open cart, ${count} items`} onClick={onBag}><ShoppingCart size={20} /><span>{count}</span></button>
           <button className="icon-button mobile-menu" aria-label="Toggle menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
         </div>
       </header>
@@ -151,7 +167,7 @@ export function HirePurchaseHeader({ onHelp }) {
         <button onClick={() => { setMenu(false); onHelp(); }}>Help</button>
       </nav>
       <div className="header-actions">
-        <Link className="hp-shop-link" to="/">Back to the shop</Link>
+        <Link className="hp-shop-link" to="/shop">Back to the shop</Link>
         <Link className="button dark compact" to="/hire-purchase/apply">Apply</Link>
         <button className="icon-button mobile-menu" aria-label="Toggle menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
       </div>
@@ -159,7 +175,7 @@ export function HirePurchaseHeader({ onHelp }) {
   );
 }
 
-export function Footer({ onHelp, note }) {
+export function Footer({ onHelp, note, showPayment = false }) {
   return (
     <footer>
       <div className="footer-top">
@@ -168,10 +184,12 @@ export function Footer({ onHelp, note }) {
         <button onClick={onHelp}>Let’s talk upgrades <ArrowUpRight size={20} /></button>
       </div>
       <div className="footer-links">
-        <Link to="/">Shop</Link>
+        <Link to="/shop">Shop</Link>
         <Link to="/hire-purchase">Hire purchase</Link>
+        <Link to="/wishlist">Wishlist</Link>
         <Link to="/checkout">Checkout</Link>
       </div>
+      {showPayment && <div className="footer-pay"><span>Secure payment by Paystack</span><PaymentBadges /></div>}
       <div className="footer-bottom"><span>© {new Date().getFullYear()} Signature Tradelink.</span><span>{note}</span></div>
     </footer>
   );

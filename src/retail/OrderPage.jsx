@@ -59,7 +59,7 @@ export default function OrderPage({ reference, search }) {
         <p className="eyebrow">ORDER {reference}</p>
         <h1 className="page-title">Open this on the device you ordered from.</h1>
         <p className="muted">For your privacy, order details only show on the device that placed the order. Your payment receipt from Paystack also has your reference.</p>
-        <Link className="button dark" to="/">Back to the shop <ArrowUpRight size={18} /></Link>
+        <Link className="button dark" to="/shop">Back to the shop <ArrowUpRight size={18} /></Link>
       </main>
     );
   }
@@ -100,7 +100,7 @@ export default function OrderPage({ reference, search }) {
             </div>
           )}
           {payError && <p className="co-error" role="alert">{payError}</p>}
-          {!paid && !pending && <Link className="button dark" to="/#shop">Back to the shop <ArrowUpRight size={18} /></Link>}
+          {!paid && !pending && <Link className="button dark" to="/shop">Back to the shop <ArrowUpRight size={18} /></Link>}
         </div>
       </div>
 

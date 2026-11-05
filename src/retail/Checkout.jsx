@@ -2,6 +2,7 @@
 // The total shown is always the server's; the order is refused if it moved after the customer saw it.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Lock, ShieldCheck, Store, Truck } from 'lucide-react';
+import { SecurePayment } from '../components/PaymentMethods';
 import { ProductImage } from '../components/shared';
 import { Link, navigate } from '../router';
 import { formatPrice } from '../services/catalogue';
@@ -128,9 +129,9 @@ export default function Checkout() {
   if (!items.length && !busy) {
     return (
       <main className="section narrow-page">
-        <h1 className="page-title">Your bag is empty.</h1>
-        <p className="muted">Add something to your bag to check out.</p>
-        <Link className="button dark" to="/#shop">Explore the collection <ArrowUpRight size={18} /></Link>
+        <h1 className="page-title">Your cart is empty.</h1>
+        <p className="muted">Add something to your cart to check out.</p>
+        <Link className="button dark" to="/shop">Explore the collection <ArrowUpRight size={18} /></Link>
       </main>
     );
   }
@@ -138,7 +139,7 @@ export default function Checkout() {
   const closed = options && !options.canOrder;
   return (
     <main className="checkout section">
-      <nav className="breadcrumb" aria-label="Breadcrumb"><Link to="/#shop"><ArrowLeft size={14} /> Continue shopping</Link></nav>
+      <nav className="breadcrumb" aria-label="Breadcrumb"><Link to="/shop"><ArrowLeft size={14} /> Continue shopping</Link></nav>
       <h1 className="page-title">Checkout</h1>
       <div className="checkout-grid">
         <div className="checkout-steps">
@@ -148,7 +149,7 @@ export default function Checkout() {
               <Lock size={20} />
               <div>
                 <strong>Checkout opens soon</strong>
-                <p>Online payment and delivery options are being set up. Nothing can be ordered yet. Your bag is saved on this device.</p>
+                <p>Online payment and delivery options are being set up. Nothing can be ordered yet. Your cart is saved on this device.</p>
               </div>
             </div>
           )}
@@ -206,11 +207,12 @@ export default function Checkout() {
                   <summary>Returns and warranty</summary>
                   <p>{options.returnsPolicy}</p>
                 </details>
+                <SecurePayment />
                 {submitError && <p className="co-error" role="alert">{submitError}</p>}
                 <button className="button dark full" disabled={!quote || busy || hasUnsellable}>
                   {busy ? 'Taking you to payment…' : quote ? `Pay ${money(quote.totalMinor, quote.currency)}` : 'Choose how you’ll get it'} <ShieldCheck size={18} />
                 </button>
-                <p className="muted small">You’ll pay securely on Paystack’s page by card or mobile money. We hold your items for {options.reservationMinutes} minutes while you pay.</p>
+                <p className="muted small">You’ll finish on Paystack’s page, then come back here. We hold your items for {options.reservationMinutes} minutes while you pay.</p>
               </section>
             </form>
           )}

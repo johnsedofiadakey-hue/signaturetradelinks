@@ -1,11 +1,13 @@
-// Retail product page: price, stock, variant and quantity, then the bag. Hire purchase is one quiet link at the end.
+// Retail product page: price, stock, variant and quantity, then the cart. Hire purchase is one quiet link at the end.
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Minus, Plus, ShoppingBag } from 'lucide-react';
-import { ProductImage } from '../components/shared';
+import { ArrowLeft, ArrowUpRight, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { SecureLine } from '../components/PaymentMethods';
+import { ProductImage, WishButton } from '../components/shared';
 import { Link } from '../router';
 import { formatPrice } from '../services/catalogue';
 import { useBag } from '../state';
 import { useProduct } from '../useProduct';
+import {useTrackProduct,WhatsAppEnquiry} from '../discovery/DiscoveryProvider';
 
 const variantLabel = variant => Object.values(variant.attributes ?? {}).join(' · ') || variant.sku;
 
@@ -25,7 +27,7 @@ export function ProductDetails({ description, specifications, detailStatus }) {
   );
 }
 
-export function NotFound({ backTo = '/', backLabel = 'Back to the shop' }) {
+export function NotFound({ backTo = '/shop', backLabel = 'Back to the shop' }) {
   return (
     <main className="section narrow-page">
       <p className="eyebrow">NOT FOUND</p>
@@ -38,6 +40,7 @@ export function NotFound({ backTo = '/', backLabel = 'Back to the shop' }) {
 
 export default function ProductPage({ slug }) {
   const { loading, product, description, specifications, variants, detailStatus } = useProduct(slug);
+  useTrackProduct(product);
   const { add } = useBag();
   const [sku, setSku] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -57,9 +60,9 @@ export default function ProductPage({ slug }) {
   return (
     <main className="pdp section">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link to="/#shop"><ArrowLeft size={14} /> Shop</Link>
+        <Link to="/shop"><ArrowLeft size={14} /> Shop</Link>
         <span>/</span>
-        <Link to={`/?category=${product.categorySlug}#shop`}>{product.category}</Link>
+        <Link to={`/shop/${product.categorySlug}`}>{product.category}</Link>
       </nav>
       <div className="pdp-grid">
         <div className="pdp-media">
@@ -93,10 +96,14 @@ export default function ProductPage({ slug }) {
               <button type="button" onClick={() => setQuantity(q => Math.min(10, q + 1))} aria-label="One more"><Plus size={14} /></button>
             </div>
             <button className="button dark grow" disabled={outOfStock || needsChoice || unpriced || detailStatus === 'loading'} onClick={() => add(product, { sku: variant?.sku ?? null, price, quantity })}>
-              {unpriced ? 'Not on sale yet' : needsChoice ? 'Choose an option' : 'Add to bag'} <ShoppingBag size={18} />
+              {unpriced ? 'Not on sale yet' : needsChoice ? 'Choose an option' : 'Add to cart'} <ShoppingCart size={18} />
             </button>
+            <WishButton product={product} className="on-page" />
           </div>
           <p className="muted small">Pay in full at checkout. Delivery or in-store collection is chosen there.</p>
+          <SecureLine />
+
+          <WhatsAppEnquiry product={product}/>
 
           {product.hirePurchase && (
             <p className="hp-quiet">Also available on hire purchase for approved customers. <Link to={`/hire-purchase/p/${product.slug}`}>See hire purchase</Link></p>

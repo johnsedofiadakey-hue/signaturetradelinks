@@ -214,3 +214,62 @@
 @media (max-width: 760px) {
   .co-grid, .co-methods, .order-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Shop page */
+.shop-page { padding-top: 34px; }
+.shop-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+.shop-heading .page-title { margin: 0; }
+.shop-heading p { margin: 0; font-size: 13px; }
+.shop-categories { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 30px; padding-bottom: 4px; scrollbar-width: none; }
+.shop-categories::-webkit-scrollbar { display: none; }
+.shop-categories a { flex: none; padding: 9px 15px; border: 1px solid #e1e4da; border-radius: 999px; font-size: 13px; color: #4c524c; transition: border-color .2s, background .2s, color .2s; }
+.shop-categories a:hover { border-color: #aebaa2; color: var(--ink); }
+.shop-categories a[aria-current="page"] { background: var(--green); border-color: var(--green); color: #fff; }
+.shop-categories a:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.nav a[aria-current="page"] { color: var(--green); font-weight: 600; }
+.shop-all-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--green); }
+.shop-all-link:hover { text-decoration: underline; }
+/* The home page's short product row: three columns at tablet width, so drop the fourth rather than orphan it. */
+@media (min-width: 761px) and (max-width: 1100px) { .shop .studio-grid .product-card:nth-child(4) { display: none; } }
+
+/* Wishlist */
+.wish-button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: #2b312d; background: #fff; transition: color .2s, transform .2s; flex: none; }
+.wish-button:hover { color: #b3402a; transform: scale(1.06); }
+.wish-button.saved { color: #b3402a; }
+.wish-button:focus-visible, .card-add:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.wish-button.on-card { position: absolute; top: 10px; right: 10px; z-index: 2; box-shadow: 0 1px 4px rgb(0 0 0 / 10%); }
+.wish-button.on-page { width: 48px; height: 48px; border: 1px solid #d3d7cc; border-radius: 4px; }
+.wish-link { position: relative; }
+.wish-link span { position: absolute; top: -2px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--green); color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
+
+/* Add to cart on product cards */
+.card-add { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 40px; margin-top: 10px; border: 1px solid var(--green); border-radius: 3px; color: var(--green); font-size: 12px; font-weight: 500; transition: background .2s, color .2s; }
+.card-add:hover:not(:disabled) { background: var(--green); color: #fff; }
+.card-add:disabled { opacity: .6; }
+
+/* Secure payment */
+.pay-badges { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.pay-badge { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; min-width: 50px; padding: 0 9px; border: 1px solid #dfe2d8; border-radius: 4px; background: #fff; color: #2b312d; font-size: 11px; font-weight: 550; white-space: nowrap; overflow: hidden; }
+.pay-badge img { display: block; width: auto; height: 22px; }
+.pay-mtn { background: #ffcb05; border-color: #ffcb05; }
+.pay-mtn img { height: 20px; }
+.pay-mtn img + img { height: 22px; border-radius: 4px; }
+.pay-telecel { padding: 0; border-color: #e52325; background: #e52325; }
+.pay-telecel img { height: 32px; }
+.pay-at img { height: 26px; }
+.pay-visa img { height: 13px; }
+.pay-bank svg { color: var(--green); }
+.secure-payment { display: grid; gap: 12px; padding: 16px; margin-bottom: 14px; border-radius: 5px; background: var(--soft); }
+.secure-heading { display: flex; gap: 11px; align-items: flex-start; }
+.secure-heading svg { color: var(--green); flex: none; margin-top: 1px; }
+.secure-heading strong { display: block; font-size: 14px; }
+.secure-heading span { font-size: 12px; color: var(--muted); }
+.secure-note, .secure-line { display: flex; gap: 7px; align-items: flex-start; margin: 0; font-size: 12px; color: var(--muted); }
+.secure-note svg, .secure-line svg { flex: none; margin-top: 2px; color: var(--green); }
+.secure-compact { display: grid; gap: 9px; margin-top: 12px; }
+.secure-line { align-items: center; }
+.secure-line img, .secured-by img { display: inline-block; width: auto; height: 13px; vertical-align: -2px; margin-left: 2px; }
+.secure-line svg { margin-top: 0; }
+.secured-by { display: block; margin: 2px 0; }
+.footer-pay { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 16px 0; font-size: 12px; color: var(--muted); }
+@media (max-width: 760px) { .pdp-actions .button { white-space: nowrap; padding-inline: 14px; gap: 8px; } }

@@ -29,3 +29,11 @@ Scope: preview-only UI. No backend, real authentication, payment, orders, applic
 - Browser checks passed: all five assets decoded at full resolution, automatic advance, direct slide selection, and category-specific Explore navigation.
 - No horizontal page overflow or hero-image bounding-box cropping at 320/390/768/1440 widths. Desktop TV, washer, audio, fridge and mobile TV screenshots saved and visually reviewed.
 - No browser page errors. Existing catalogue remains separate from the editorial hero. No deployment performed.
+
+## Complete landing-page visual pass
+
+See `LANDING_VISUAL_HANDOFF.md` for current visual scope, asset provenance and exact checks. The normal and reduced-motion browser scenarios passed. Full-page captures are `outputs/landing-polish-desktop.png` and `outputs/landing-polish-mobile.png`. API failures were explicitly simulated for deterministic fixture checks; no database, payment or assessment submission was exercised. Real-image mapping preservation was checked separately. Local-only update.
+
+## Shopping discovery features
+
+Five model tests passed (`node --test tests/discovery.test.mjs`). Offline and intercepted-API browser checks passed for the finder, three-product comparison, quick view, recent persistence/clearing and WhatsApp draft URLs. No WhatsApp message was sent or external link opened. Responsive checks passed at 320/390/768/1440; full scope and data limitations are in `SHOPPING_DISCOVERY_HANDOFF.md`. No production deployment performed.

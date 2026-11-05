@@ -1,5 +1,6 @@
-// The retail bag. Only outright purchases live here; the server re-prices everything at checkout.
-import { ArrowRight, Minus, Plus, ShoppingBag } from 'lucide-react';
+// The retail cart. Only outright purchases live here; the server re-prices everything at checkout.
+import { ArrowRight, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { SecureLine } from '../components/PaymentMethods';
 import { Modal, ProductImage } from '../components/shared';
 import { Link } from '../router';
 import { formatPrice } from '../services/catalogue';
@@ -10,8 +11,8 @@ export default function BagDialog({ onClose }) {
   const subtotal = bagSubtotal(items);
   return (
     <Modal onClose={onClose} className="cart-modal">
-      <p className="eyebrow">YOUR BAG</p>
-      <h2 id="dialog-title">Your bag <span className="muted">({count})</span></h2>
+      <p className="eyebrow">YOUR CART</p>
+      <h2 id="dialog-title">Your cart <span className="muted">({count})</span></h2>
       {items.length ? (
         <>
           <div className="cart-items">
@@ -37,14 +38,15 @@ export default function BagDialog({ onClose }) {
           </div>
           <p className="muted small">Delivery or collection is chosen at checkout.</p>
           <Link className="button dark full" to="/checkout" onClick={onClose}>Go to checkout <ArrowRight size={18} /></Link>
+          <SecureLine />
           <button className="text-button" onClick={onClose}>Continue shopping</button>
         </>
       ) : (
         <div className="empty">
-          <ShoppingBag size={35} />
+          <ShoppingCart size={35} />
           <h3>A little room for an upgrade.</h3>
-          <p>Your bag is empty.</p>
-          <Link className="button dark" to="/#shop" onClick={onClose}>Explore the collection <ArrowRight size={18} /></Link>
+          <p>Your cart is empty.</p>
+          <Link className="button dark" to="/shop" onClick={onClose}>Explore the collection <ArrowRight size={18} /></Link>
         </div>
       )}
     </Modal>

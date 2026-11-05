@@ -5,6 +5,9 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './clean.css';
 import './stores.css';
+import './landing.css';
+import './discovery/discovery.css';
+import {DiscoveryProvider} from './discovery/DiscoveryProvider';
 import { Footer, HelpDialog, HirePurchaseHeader, PreviewStrip, RetailHeader, Toast } from './components/shared';
 import Apply from './hire-purchase/Apply';
 import HirePurchaseHome from './hire-purchase/HirePurchaseHome';
@@ -14,6 +17,8 @@ import Checkout from './retail/Checkout';
 import OrderPage from './retail/OrderPage';
 import ProductPage, { NotFound } from './retail/ProductPage';
 import RetailHome from './retail/RetailHome';
+import ShopPage from './retail/ShopPage';
+import WishlistPage from './retail/WishlistPage';
 import { match, navigate, useLocation } from './router';
 import { StoreProvider, useCatalogue } from './state';
 
@@ -23,22 +28,35 @@ function useTitle(title) {
 
 function App() {
   const { path, search } = useLocation();
-  const { products, checkoutOpen } = useCatalogue();
+  const { categories, products, checkoutOpen } = useCatalogue();
   const [help, setHelp] = useState(false);
   const [bagOpen, setBagOpen] = useState(false);
   const [query, setQuery] = useState('');
   const openHelp = useCallback(() => setHelp(true), []);
   const closeHelp = useCallback(() => setHelp(false), []);
   const closeBag = useCallback(() => setBagOpen(false), []);
+  const resetQuery = useCallback(() => setQuery(''), []);
+
+  // Links shared before the shop had its own page still land in the right place.
+  useEffect(() => {
+    if (path !== '/') return;
+    const legacy = new URLSearchParams(search).get('category');
+    if (legacy) navigate(`/shop/${legacy}`, { replace: true });
+    else if (window.location.hash === '#shop') navigate('/shop', { replace: true });
+  }, [path, search]);
 
   const hirePurchase = path === '/hire-purchase' || path.startsWith('/hire-purchase/');
+  const shopCategory = match('/shop/:category', path)?.category;
   const productSlug = match('/p/:slug', path)?.slug;
   const hpSlug = match('/hire-purchase/p/:slug', path)?.slug;
   const nameOf = slug => products.find(p => p.slug === slug)?.name;
 
   let page;
   let title;
-  if (path === '/' || path === '') { page = <RetailHome search={search} query={query} onResetQuery={() => setQuery('')} />; }
+  if (path === '/' || path === '') { page = <RetailHome />; }
+  else if (match('/shop', path)) { page = <ShopPage query={query} onResetQuery={resetQuery} />; title = 'Shop'; }
+  else if (shopCategory) { page = <ShopPage categorySlug={shopCategory} query={query} onResetQuery={resetQuery} />; title = categories.find(c => c.slug === shopCategory)?.label ?? 'Shop'; }
+  else if (match('/wishlist', path)) { page = <WishlistPage />; title = 'Wishlist'; }
   else if (productSlug) { page = <ProductPage slug={productSlug} />; title = nameOf(productSlug); }
   else if (match('/checkout', path)) { page = <Checkout />; title = 'Checkout'; }
   else if (match('/order/:reference', path)) { page = <OrderPage reference={match('/order/:reference', path).reference} search={search} />; title = 'Your order'; }
@@ -51,7 +69,7 @@ function App() {
   // Searching always searches the shop, so leave other pages for the product list.
   const onQuery = value => {
     setQuery(value);
-    if (path !== '/') navigate('/#shop');
+    if (value && !match('/shop', path) && !shopCategory) navigate('/shop');
   };
 
   return (
@@ -59,7 +77,7 @@ function App() {
       <PreviewStrip />
       {hirePurchase ? <HirePurchaseHeader onHelp={openHelp} /> : <RetailHeader onHelp={openHelp} onBag={() => setBagOpen(true)} query={query} onQuery={onQuery} />}
       {page}
-      <Footer onHelp={openHelp} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : checkoutOpen ? '' : 'Design preview · Catalogue & policies awaiting confirmation'} />
+      <Footer onHelp={openHelp} showPayment={!hirePurchase} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : checkoutOpen ? '' : 'Design preview · Catalogue & policies awaiting confirmation'} />
       <Toast />
       {help && <HelpDialog onClose={closeHelp} />}
       {bagOpen && <BagDialog onClose={closeBag} />}
@@ -67,4 +85,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<StoreProvider><App /></StoreProvider>);
+createRoot(document.getElementById('root')).render(<StoreProvider><DiscoveryProvider><App /></DiscoveryProvider></StoreProvider>);

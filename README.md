@@ -43,3 +43,12 @@ Confirm real branding, catalogue/media, currency, prices, stock, payment provide
 ## Media
 
 Local stock images downloaded from Unsplash image URLs on 5 November 2026; visual placeholders, not proof of brands/stock/specifications. Source URLs are in `planning/MEDIA.md`. Supplied design reference is inspiration and was not copied into product assets.
+
+
+## Latest landing-page visuals
+
+The white product-led landing page now includes photographic categories, a consistent studio preview collection, one labelled AI-generated room feature and an ivory hire-purchase invitation with reduced-motion-aware animations. Source/prompt and integration notes: `planning/LANDING_VISUAL_HANDOFF.md`. Local update; not a new deployment.
+
+## Shopping discovery
+
+Homepage product finder, retail quick view/comparison (up to three), browser-local recently viewed history and product-specific WhatsApp drafts are implemented. Owner-provided enquiry number: +233549329735; override with public `VITE_WHATSAPP_NUMBER` if needed. Catalogue facts drive matching; missing prices/specifications remain unconfirmed. Read `planning/SHOPPING_DISCOVERY_HANDOFF.md`. Model checks: `node --test tests/discovery.test.mjs`.
