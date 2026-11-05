@@ -8,3 +8,13 @@ Replace with actual product photos before launch. These are stock illustrations 
 - `public/speaker.jpg`: https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&w=800&q=80
 
 Air conditioner and washing machine: CSS illustrations in `src/styles.css`.
+
+
+## Supplied brand artwork
+
+`public/brand/signature-tradelink-original.png` is the original logo supplied by the owner on 5 November 2026. Its bytes are preserved unchanged. The `BrandLogo` component frames the logo with CSS to fit the header/footer; no photographic or AI alteration was performed.
+
+
+## Product-led hero revision
+
+Five AI-retouched transparent hero PNGs are saved in `public/hero/`. Manufacturer reference images remain under `public/hero/sources/`. See `HERO_IMAGE_PROMPTS.md` for source URLs, exact prompts and output paths. The original unedited stock images remain in use for the illustrative catalogue; hero art is a separate presentation layer.

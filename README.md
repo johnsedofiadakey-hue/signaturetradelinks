@@ -1,6 +1,6 @@
-# Signature Trade Links
+# Signature Tradelink
 
-Local customer storefront preview for a gadget and appliance retailer. Built in React + Vite, inspired by the supplied white/orange headphone reference. Working business name comes from the workspace and needs confirmation.
+Local customer storefront preview for a gadget and appliance retailer. Built in React + Vite. The customer storefront uses the supplied Signature Tradelink logo, the original clean white design and a simple five-product crossfade. The dark luxury concept was rejected; keep the hero minimal. See `planning/CLEAN_UI_HANDOFF.md` for the current direction.
 
 ## Run
 

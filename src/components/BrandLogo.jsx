@@ -1,0 +1,1 @@
+export default function BrandLogo(){return <a className="brand-logo" href="#" aria-label="Signature Tradelink home"><span className="brand-logo-frame"><img src="/brand/signature-tradelink-original.png" alt="Signature Tradelink" width="1800" height="1200"/></span></a>}

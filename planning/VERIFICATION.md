@@ -10,3 +10,22 @@
 - Desktop and mobile screenshots visually reviewed; saved in `outputs/`.
 
 Scope: preview-only UI. No backend, real authentication, payment, orders, application submission, assessment or agreement flows were tested or implemented. Stock photos and CSS appliance illustrations are placeholders. Full accessibility and cross-browser audits remain future release checks.
+
+## Luxury UI update — 5 November 2026
+
+- Final production build passed for storefront and existing admin entry point; same non-blocking upstream lucide warnings.
+- Chromium checks passed: all five slides, automatic advancement, pause/resume, direct selectors, next/previous wrapping and keyboard arrows.
+- Reduced-motion browser preference prevented automatic advancement and decorative animation; manual next navigation remained functional.
+- No horizontal overflow at 320, 390, 768, 1024 and 1440 pixels.
+- Existing category/search/eligibility filters, cart quantity/removal and assessment walkthrough passed against the labelled fixture fallback. No browser page errors recorded.
+- Mobile menu navigation passed. Desktop, cooling slide and fully revealed mobile screenshots reviewed in `outputs/luxury-*.png`.
+- Hero caption space reserved for wrapping text to avoid vertical shifts during slide changes.
+- Logo file copied byte-for-byte from user attachment. Backend/admin code and current hosting configuration were preserved; no deployment performed by this update.
+- Verification does not cover live catalogue data, payment/authentication or assessment submission. The API was not running in this local test, and its existing fixture fallback was clearly shown.
+
+## Product-led hero and image edit revision
+
+- Built-in image editing produced five separate transparent PNG assets. Dimensions range from 1024px to 1672px wide; all retain alpha channels. Source and prompt provenance is in `HERO_IMAGE_PROMPTS.md`.
+- Browser checks passed: all five assets decoded at full resolution, automatic advance, direct slide selection, and category-specific Explore navigation.
+- No horizontal page overflow or hero-image bounding-box cropping at 320/390/768/1440 widths. Desktop TV, washer, audio, fridge and mobile TV screenshots saved and visually reviewed.
+- No browser page errors. Existing catalogue remains separate from the editorial hero. No deployment performed.
