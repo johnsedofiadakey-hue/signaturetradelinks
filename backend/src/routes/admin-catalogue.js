@@ -33,6 +33,9 @@ const productSpec = {
   illustration: nullable(oneOf(PRODUCT_ILLUSTRATIONS)),
 };
 
+// Where the product is sold: retail always; the hire-purchase store only when an approver says so, with a reason.
+const hirePurchaseSpec = { enabled: bool(), reason: nullable(str({ min: 3, max: 500 })) };
+
 const variantSpec = {
   sku: str({ max: 40, pattern: SKU, patternMessage: 'Use 2–40 uppercase letters, numbers and hyphens.' }),
   attributes: stringMap(),
@@ -134,8 +137,11 @@ export function registerAdminCatalogue(route) {
     const status = query.get('status');
     if (status && !PRODUCT_STATUSES.includes(status)) fail('validation_failed', 'The status filter is invalid.', { fieldErrors: { status: 'Unknown status.' } });
     const q = query.get('q')?.trim();
+    const store = query.get('store');
+    if (store && !['retail', 'hire_purchase'].includes(store)) fail('validation_failed', 'The store filter is invalid.', { fieldErrors: { store: 'Use retail or hire_purchase.' } });
     const snap = await (status ? db.collection(C.products).where('publishStatus', '==', status) : db.collection(C.products)).get();
-    const docs = snap.docs.filter(doc => !q || matches(q, doc.data().title, doc.data().slug)).map(doc => ({ id: doc.id, title: doc.data().title, doc }));
+    // Every product is sold in the retail store; store=hire_purchase narrows to the eligible ones.
+    const docs = snap.docs.filter(doc => (!q || matches(q, doc.data().title, doc.data().slug)) && (store !== 'hire_purchase' || doc.data().hirePurchaseEnabled)).map(doc => ({ id: doc.id, title: doc.data().title, doc }));
     const page = paginateByTitle(docs, cursor, limit);
     return { data: { items: await adminProductDtos(db, page.items.map(item => item.doc)), nextCursor: page.nextCursor } };
   });
@@ -149,13 +155,21 @@ export function registerAdminCatalogue(route) {
 
   route('POST', '/admin/products', async ctx => {
     const staff = await requireStaff(ctx, 'catalogue:write');
-    const input = validate(ctx.body, productSpec, { optional: ['tagline', 'brand', 'specifications', 'images', 'illustration', 'description'] });
+    const input = validate(ctx.body, { ...productSpec, hirePurchase: shape(hirePurchaseSpec) }, { optional: ['tagline', 'brand', 'specifications', 'images', 'illustration', 'description', 'hirePurchase'] });
+    // Marking a product for the hire-purchase store while adding it needs the same permission and reason as changing it later.
+    const hirePurchaseEnabled = input.hirePurchase?.enabled === true;
+    if (hirePurchaseEnabled && !staff.permissions.includes('catalogue:hire_purchase')) {
+      fail('forbidden', 'An approver marks hire-purchase eligibility. Create the product without it and ask an approver to enable it.');
+    }
+    if (hirePurchaseEnabled && !input.hirePurchase.reason) {
+      fail('validation_failed', 'Some details need attention.', { fieldErrors: { 'hirePurchase.reason': 'Give a reason for making this product eligible.' } });
+    }
     const id = newId('prd');
     const at = now();
     const product = {
       slug: input.slug, title: input.title, description: input.description ?? '', tagline: input.tagline ?? null, categoryId: input.categoryId,
       brand: input.brand ?? null, specifications: input.specifications ?? [], images: input.images ?? [], illustration: input.illustration ?? null,
-      publishStatus: 'draft', hirePurchaseEnabled: false, illustrative: false, version: 1, createdAt: at, updatedAt: at,
+      publishStatus: 'draft', hirePurchaseEnabled, illustrative: false, version: 1, createdAt: at, updatedAt: at,
     };
     await transaction(ctx.db, async tx => {
       const slugRef = ctx.db.collection(C.productSlugs).doc(input.slug);
@@ -164,6 +178,12 @@ export function registerAdminCatalogue(route) {
       tx.create(slugRef, { productId: id });
       tx.create(ctx.db.collection(C.products).doc(id), product);
       recordAudit(ctx.db, tx, { ...auditFrom(ctx, staff), action: 'product.created', resourceType: 'product', resourceId: id, after: productFields(id, product) });
+      if (hirePurchaseEnabled) {
+        recordAudit(ctx.db, tx, {
+          ...auditFrom(ctx, staff), action: 'product.hire_purchase_changed', resourceType: 'product', resourceId: id,
+          before: { hirePurchaseEnabled: false }, after: { hirePurchaseEnabled: true }, metadata: { reason: input.hirePurchase.reason },
+        });
+      }
     });
     return { status: 201, data: await adminProductDto(ctx.db, id) };
   });

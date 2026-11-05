@@ -120,6 +120,30 @@ describe('catalogue lifecycle', () => {
     product = enabled.body.data;
     assert.equal((await approver.patch(`/admin/products/${product.id}`, { title: 'Nope', expectedVersion: product.version })).status, 403);
   });
+
+  test('hire-purchase eligibility can be set while adding a product, with permission and a reason', async () => {
+    const noReason = await owner.post('/admin/products', { slug: 'hp-at-create-0', title: 'HP at create', categoryId: category.id, hirePurchase: { enabled: true, reason: null } });
+    assert.equal(noReason.status, 422);
+    assert.ok(noReason.body.error.fieldErrors['hirePurchase.reason']);
+
+    const created = await owner.post('/admin/products', { slug: 'hp-at-create', title: 'HP at create', categoryId: category.id, hirePurchase: { enabled: true, reason: 'Approved for HP range' } });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.data.hirePurchaseEnabled, true);
+    const events = (await owner.get(`/admin/audit-events?resourceType=product&resourceId=${created.body.data.id}`)).body.data.items;
+    assert.ok(events.some(e => e.action === 'product.hire_purchase_changed' && e.metadata.reason === 'Approved for HP range'));
+
+    const { client: manager } = await staffClient(server.base, owner, { email: 'cm-hp@example.test', roles: ['catalogue_manager'] });
+    const blocked = await manager.post('/admin/products', { slug: 'hp-by-manager', title: 'HP by manager', categoryId: category.id, hirePurchase: { enabled: true, reason: 'Trying' } });
+    assert.equal(blocked.status, 403);
+    const retailOnly = await manager.post('/admin/products', { slug: 'retail-by-manager', title: 'Retail by manager', categoryId: category.id, hirePurchase: { enabled: false, reason: null } });
+    assert.equal(retailOnly.status, 201);
+    assert.equal(retailOnly.body.data.hirePurchaseEnabled, false);
+
+    const hpStore = (await owner.get('/admin/products?store=hire_purchase')).body.data.items;
+    assert.ok(hpStore.length > 0 && hpStore.every(p => p.hirePurchaseEnabled));
+    assert.ok(hpStore.some(p => p.slug === 'hp-at-create'));
+    assert.equal((await owner.get('/admin/products?store=nope')).status, 422);
+  });
 });
 
 describe('prices and currency', () => {

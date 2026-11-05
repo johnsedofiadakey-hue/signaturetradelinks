@@ -257,11 +257,12 @@ function Dashboard({ can }) {
 
 function ProductList({ categories }) {
   const [status, setStatus] = useState('');
+  const [store, setStore] = useState('');
   const [q, setQ] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const load = useCallback(async cursor => {
-    const params = new URLSearchParams({ ...(status && { status }), ...(q.trim() && { q: q.trim() }), ...(cursor && { cursor }) });
+    const params = new URLSearchParams({ ...(status && { status }), ...(store && { store }), ...(q.trim() && { q: q.trim() }), ...(cursor && { cursor }) });
     try {
       const data = await api('GET', `/admin/products?${params}`);
       setResult(prev => (cursor ? { items: [...prev.items, ...data.items], nextCursor: data.nextCursor } : data));
@@ -269,7 +270,7 @@ function ProductList({ categories }) {
     } catch (failure) {
       setError(failure);
     }
-  }, [status, q]);
+  }, [status, store, q]);
   useEffect(() => { const t = setTimeout(() => load(), 200); return () => clearTimeout(t); }, [load]);
   const categoryLabel = id => categories.find(c => c.id === id)?.label ?? '—';
   return (
@@ -283,12 +284,15 @@ function ProductList({ categories }) {
         <select aria-label="Filter by status" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option>
         </select>
+        <select aria-label="Filter by store" value={store} onChange={e => setStore(e.target.value)}>
+          <option value="">All stores</option><option value="hire_purchase">Hire purchase store</option>
+        </select>
       </div>
       <ErrorBanner error={error} />
       {result && (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Product</th><th>Category</th><th>Status</th><th>Hire purchase</th><th>SKUs</th><th>Updated</th></tr></thead>
+            <thead><tr><th>Product</th><th>Category</th><th>Status</th><th>Stores</th><th>SKUs</th><th>Updated</th></tr></thead>
             <tbody>
               {result.items.map(p => (
                 <tr key={p.id} onClick={() => go(`products/${p.id}`)} className="clickable">
@@ -298,7 +302,7 @@ function ProductList({ categories }) {
                   </td>
                   <td>{categoryLabel(p.categoryId)}</td>
                   <td><StatusChip status={p.publishStatus} /></td>
-                  <td>{p.hirePurchaseEnabled ? 'Eligible' : '—'}</td>
+                  <td>{p.hirePurchaseEnabled ? <span className="tag hp">Retail + HP</span> : <span className="muted">Retail</span>}</td>
                   <td>{p.variants.length}</td>
                   <td className="muted">{formatDate(p.updatedAt)}</td>
                 </tr>
@@ -315,6 +319,7 @@ function ProductList({ categories }) {
 
 const emptyProduct = categoryId => ({
   slug: '', title: '', tagline: '', categoryId: categoryId ?? '', brand: '', description: '', images: [], illustration: null, specifications: [],
+  hirePurchase: { enabled: false, reason: '' },
 });
 
 function productForm(product) {
@@ -325,8 +330,11 @@ function productForm(product) {
 }
 
 function formPayload(form) {
+  // Only the new-product form carries hirePurchase; later changes go through the audited eligibility endpoint.
+  const hirePurchase = form.hirePurchase && { enabled: form.hirePurchase.enabled, reason: form.hirePurchase.enabled ? form.hirePurchase.reason.trim() || null : null };
   return {
     ...form,
+    ...(hirePurchase && { hirePurchase }),
     tagline: form.tagline.trim() || null,
     brand: form.brand.trim() || null,
     images: form.images.filter(i => i.src.trim() || i.alt.trim()),
@@ -353,6 +361,10 @@ function ProductEditor({ id, categories, can, notify, currency, setReasonRequest
     }
   }, [id]);
   useEffect(() => { if (!isNew) load(); }, [isNew, load]);
+  // Categories may arrive after the new-product form was created; default to the first so the select and the payload agree.
+  useEffect(() => {
+    if (isNew && categories[0]) setForm(f => (f.categoryId ? f : { ...f, categoryId: categories[0].id }));
+  }, [isNew, categories]);
 
   async function save(event) {
     event.preventDefault();
@@ -391,8 +403,10 @@ function ProductEditor({ id, categories, can, notify, currency, setReasonRequest
   function toggleHirePurchase() {
     const enabling = !product.hirePurchaseEnabled;
     setReasonRequest({
-      title: enabling ? 'Make eligible for hire purchase' : 'Remove hire-purchase eligibility',
-      description: 'Eligibility is a policy decision. Customers will see the hire-purchase option on this product only when it is enabled.',
+      title: enabling ? 'Add to the hire purchase store' : 'Remove from the hire purchase store',
+      description: enabling
+        ? 'Approved hire-purchase customers will be able to buy this product on credit. Retail is unaffected.'
+        : 'New hire-purchase purchases of this product stop. Agreements already accepted are unaffected.',
       confirmLabel: enabling ? 'Enable' : 'Disable',
       onConfirm: async reason => {
         const updated = await api('POST', `/admin/products/${id}/hire-purchase`, { enabled: enabling, expectedVersion: product.version, reason });
@@ -479,6 +493,39 @@ function ProductEditor({ id, categories, can, notify, currency, setReasonRequest
             ))}
             {fe.specifications && <span className="field-error">{fe.specifications}</span>}
             <button type="button" className="btn ghost small" onClick={() => set({ specifications: [...form.specifications, { label: '', value: '' }] })}><Plus size={14} /> Add specification</button>
+
+            {isNew && (
+              <>
+                <h2>Where it is sold</h2>
+                <div className="store-choices">
+                  <label className="store-choice locked">
+                    <input type="checkbox" checked disabled />
+                    <span><strong>Retail store</strong><span className="muted small">Every published product is sold outright to anyone.</span></span>
+                  </label>
+                  <label className={`store-choice${can('catalogue:hire_purchase') ? '' : ' locked'}`}>
+                    <input
+                      type="checkbox"
+                      checked={form.hirePurchase.enabled}
+                      disabled={!can('catalogue:hire_purchase')}
+                      onChange={e => set({ hirePurchase: { ...form.hirePurchase, enabled: e.target.checked } })}
+                    />
+                    <span>
+                      <strong>Hire purchase store</strong>
+                      <span className="muted small">
+                        {can('catalogue:hire_purchase')
+                          ? 'Approved hire-purchase customers can buy this on credit.'
+                          : 'An approver marks hire-purchase eligibility. They can enable it after you create the product.'}
+                      </span>
+                    </span>
+                  </label>
+                  {form.hirePurchase.enabled && (
+                    <Field label="Reason for hire-purchase eligibility" hint="Recorded in the audit log." error={fe['hirePurchase.reason']}>
+                      <input required minLength={3} maxLength={500} value={form.hirePurchase.reason} placeholder="e.g. Approved for the HP range, 5 Nov" onChange={e => set({ hirePurchase: { ...form.hirePurchase, reason: e.target.value } })} />
+                    </Field>
+                  )}
+                </div>
+              </>
+            )}
           </fieldset>
           {editable && <div className="row end sticky-actions"><button className="btn primary" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Create draft' : 'Save changes'}</button></div>}
         </form>
@@ -486,11 +533,14 @@ function ProductEditor({ id, categories, can, notify, currency, setReasonRequest
         {!isNew && (
           <aside className="stack">
             <section className="panel">
-              <h2>Hire purchase</h2>
-              <p className="muted small">{product.hirePurchaseEnabled ? 'Eligible. Customers can apply for an assessment.' : 'Not eligible. Customers can only buy outright.'}</p>
+              <h2>Where it is sold</h2>
+              <dl className="store-status">
+                <div><dt>Retail store</dt><dd>Always</dd></div>
+                <div><dt>Hire purchase store</dt><dd>{product.hirePurchaseEnabled ? <span className="tag hp">Eligible</span> : 'Not eligible'}</dd></div>
+              </dl>
               {can('catalogue:hire_purchase')
-                ? <button className="btn ghost full" onClick={toggleHirePurchase}>{product.hirePurchaseEnabled ? 'Disable eligibility' : 'Enable eligibility'}</button>
-                : <p className="muted small">Only an owner or approver can change this.</p>}
+                ? <button className="btn ghost full" onClick={toggleHirePurchase}>{product.hirePurchaseEnabled ? 'Remove from hire purchase store' : 'Add to hire purchase store'}</button>
+                : <p className="muted small">Only an owner or approver can change hire-purchase eligibility.</p>}
             </section>
             <Variants product={product} editable={editable} currency={currency} onChange={load} notify={notify} />
           </aside>

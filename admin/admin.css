@@ -95,6 +95,18 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .chip-draft, .chip-invited { background: var(--orange-soft); color: #b2511f; }
 .chip-archived, .chip-deactivated { background: #ececea; color: var(--muted); }
 .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; background: var(--canvas); font-size: 11px; color: var(--muted); font-weight: 500; vertical-align: middle; }
+.tag.hp { margin-left: 0; background: var(--orange-soft); color: #a8481a; }
+.store-choices { display: grid; gap: 10px; }
+.store-choice { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.store-choice > span { display: grid; gap: 2px; }
+.store-choice input { margin-top: 3px; flex: none; }
+.store-choice:has(input:checked) { border-color: var(--ink); }
+.store-choice.locked { cursor: default; background: var(--canvas); }
+.store-choice.locked:has(input:checked) { border-color: var(--line); }
+.store-status { display: grid; gap: 8px; margin: 10px 0 14px; }
+.store-status div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.store-status dt { color: var(--muted); }
+.store-status dd { margin: 0; font-weight: 500; }
 
 /* auth */
 .auth { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; gap: 18px; }
