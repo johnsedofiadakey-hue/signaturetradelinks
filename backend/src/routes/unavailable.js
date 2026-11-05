@@ -3,9 +3,6 @@ import { fail } from '../http.js';
 // Contract endpoints that depend on owner decisions (payment provider, prices, delivery,
 // hire-purchase policy, consent copy). They fail loudly instead of returning success-looking data.
 const UNAVAILABLE = [
-  ['POST', '/checkout/quote'],
-  ['POST', '/orders'],
-  ['POST', '/orders/:id/payments'],
   ['GET', '/me/orders'],
   ['GET', '/me/orders/:id'],
   ['POST', '/hire-purchase/applications'],
@@ -22,7 +19,6 @@ const UNAVAILABLE = [
   ['GET', '/admin/applications'],
   ['POST', '/admin/applications/:id/transitions'],
   ['POST', '/admin/applications/:id/offers'],
-  ['GET', '/admin/orders'],
   ['GET', '/admin/payments'],
 ];
 

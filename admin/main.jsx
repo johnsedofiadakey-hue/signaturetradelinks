@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  LayoutGrid, Package, Boxes, Users, Settings, ScrollText, LogOut, Plus, ArrowLeft, Search, Check, X, AlertTriangle,
+  LayoutGrid, Package, Boxes, ShoppingCart, Users, Settings, ScrollText, LogOut, Plus, ArrowLeft, Search, Check, X, AlertTriangle,
   Copy, Trash2, RefreshCw, ShieldCheck, ExternalLink,
 } from 'lucide-react';
 import { INVENTORY_REASONS, PRODUCT_ILLUSTRATIONS, STAFF_ROLES } from '../shared/contract.js';
@@ -12,6 +12,7 @@ const NAV = [
   { path: 'dashboard', label: 'Overview', icon: LayoutGrid, permission: 'dashboard:read' },
   { path: 'products', label: 'Catalogue', icon: Package, permission: 'catalogue:read' },
   { path: 'inventory', label: 'Inventory', icon: Boxes, permission: 'inventory:read' },
+  { path: 'orders', label: 'Orders', icon: ShoppingCart, permission: 'orders:read' },
   { path: 'staff', label: 'Staff', icon: Users, permission: 'staff:manage' },
   { path: 'settings', label: 'Settings', icon: Settings, permission: 'settings:manage' },
   { path: 'audit', label: 'Audit log', icon: ScrollText, permission: 'audit:read' },
@@ -21,7 +22,7 @@ const ROLE_LABELS = {
   owner: 'Owner', catalogue_manager: 'Catalogue manager', assessor: 'Assessor', approver: 'Approver', finance: 'Finance', fulfilment: 'Fulfilment',
 };
 const REASON_LABELS = {
-  stock_received: 'Stock received', count_correction: 'Count correction', damaged: 'Damaged', returned_to_supplier: 'Returned to supplier', other: 'Other',
+  stock_received: 'Stock received', count_correction: 'Count correction', damaged: 'Damaged', returned_to_supplier: 'Returned to supplier', other: 'Other', retail_sale: 'Retail sale',
 };
 const STATUS_ACTIONS = {
   draft: [['publish', 'Publish']],
@@ -239,7 +240,7 @@ function Dashboard({ can }) {
         <div className="banner warn">
           <AlertTriangle size={18} />
           <div>
-            <strong>Owner settings needed before prices can be set.</strong>
+            <strong>Owner settings needed before prices and checkout can go live.</strong>
             <span> Missing: {data.settingsMissing.join(', ')}. {can('settings:manage') && <a className="link" href="#/settings">Open settings</a>}</span>
           </div>
         </div>
@@ -880,26 +881,97 @@ function Staff({ me, notify, setReasonRequest }) {
 
 /* ---------- settings & audit ---------- */
 
+const SETTING_TITLES = {
+  'store.currency': 'Store currency',
+  'checkout.deliveryZones': 'Delivery areas and fees',
+  'checkout.pickup': 'In-store collection',
+  'checkout.reservationMinutes': 'Stock hold for unpaid orders',
+  'checkout.returnsPolicy': 'Returns and warranty wording',
+};
+
+const slugify = text => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+/** Convert between what the form shows and what the API stores. Empty means "not set". */
+const SETTING_FORMS = {
+  'store.currency': { toDraft: value => value ?? '', toValue: draft => draft.trim().toUpperCase() || null },
+  'checkout.deliveryZones': {
+    toDraft: (value, currency) => (value ?? []).map(zone => ({ name: zone.name, fee: toMajorText(zone.feeMinor, currency) })),
+    toValue: (draft, currency) => {
+      const zones = draft.filter(zone => zone.name.trim());
+      if (!zones.length) return null;
+      if (!currency) throw new ApiFailure(422, { code: 'validation_failed', message: 'Set the store currency first.' });
+      return zones.map(zone => {
+        const feeMinor = toMinor(zone.fee.trim() || '0', currency);
+        if (feeMinor === null) throw new ApiFailure(422, { code: 'validation_failed', message: `Enter the fee for ${zone.name.trim()} as a number, for example 25.00.` });
+        return { id: slugify(zone.name), name: zone.name.trim(), feeMinor };
+      });
+    },
+  },
+  'checkout.pickup': {
+    toDraft: value => value ?? { address: '', hours: '' },
+    toValue: draft => (draft.address.trim() || draft.hours.trim() ? { address: draft.address.trim(), hours: draft.hours.trim() } : null),
+  },
+  'checkout.reservationMinutes': { toDraft: value => (value ?? '').toString(), toValue: draft => (draft.trim() ? Number(draft) : null) },
+  'checkout.returnsPolicy': { toDraft: value => value ?? '', toValue: draft => draft.trim() || null },
+};
+
+function SettingEditor({ setting, draft, onChange, currency }) {
+  switch (setting.key) {
+    case 'store.currency':
+      return <input aria-label={SETTING_TITLES[setting.key]} maxLength={3} placeholder="e.g. GHS" value={draft} onChange={e => onChange(e.target.value)} />;
+    case 'checkout.deliveryZones':
+      return (
+        <div className="stack">
+          {!currency && <span className="muted small">Set the store currency first, so fees can be entered.</span>}
+          {draft.map((zone, index) => (
+            <div className="list-row" key={index}>
+              <Field label="Area"><input maxLength={80} placeholder="e.g. Accra" value={zone.name} onChange={e => onChange(draft.map((z, i) => (i === index ? { ...z, name: e.target.value } : z)))} /></Field>
+              <Field label={`Fee${currency ? ` (${currency})` : ''}`}><input inputMode="decimal" placeholder="0.00" value={zone.fee} disabled={!currency} onChange={e => onChange(draft.map((z, i) => (i === index ? { ...z, fee: e.target.value } : z)))} /></Field>
+              <button type="button" className="icon-btn" aria-label="Remove area" onClick={() => onChange(draft.filter((_, i) => i !== index))}><Trash2 size={16} /></button>
+            </div>
+          ))}
+          <button type="button" className="btn ghost small" onClick={() => onChange([...draft, { name: '', fee: '' }])}><Plus size={14} /> Add area</button>
+        </div>
+      );
+    case 'checkout.pickup':
+      return (
+        <div className="two">
+          <Field label="Store address"><input maxLength={300} value={draft.address} onChange={e => onChange({ ...draft, address: e.target.value })} /></Field>
+          <Field label="Opening hours"><input maxLength={200} value={draft.hours} onChange={e => onChange({ ...draft, hours: e.target.value })} /></Field>
+        </div>
+      );
+    case 'checkout.reservationMinutes':
+      return <label className="row"><input aria-label={SETTING_TITLES[setting.key]} type="number" min={5} max={1440} value={draft} onChange={e => onChange(e.target.value)} /> <span className="muted small">minutes (5 to 1440)</span></label>;
+    default:
+      return <textarea aria-label={SETTING_TITLES[setting.key]} rows={4} maxLength={2000} value={draft} onChange={e => onChange(e.target.value)} />;
+  }
+}
+
 function SettingsPage({ notify, onCurrencyChange }) {
   const [settings, setSettings] = useState(null);
   const [drafts, setDrafts] = useState({});
   const [error, setError] = useState(null);
+  const [errorKey, setErrorKey] = useState(null);
+  const currencyOf = list => list.find(s => s.key === 'store.currency')?.value ?? null;
   const load = useCallback(() => api('GET', '/admin/settings').then(data => {
     setSettings(data);
-    setDrafts(Object.fromEntries(data.map(s => [s.key, s.value ?? ''])));
+    setDrafts(Object.fromEntries(data.map(s => [s.key, SETTING_FORMS[s.key].toDraft(s.value, currencyOf(data))])));
   }, setError), []);
   useEffect(() => { load(); }, [load]);
+  const currency = settings ? currencyOf(settings) : null;
 
   async function save(setting) {
     setError(null);
-    const value = drafts[setting.key].trim().toUpperCase() || null;
+    setErrorKey(null);
     try {
+      const value = SETTING_FORMS[setting.key].toValue(drafts[setting.key], currency);
       await api('PUT', `/admin/settings/${setting.key}`, { value, expectedVersion: setting.version });
       notify('Setting saved');
       if (setting.key === 'store.currency') onCurrencyChange(value);
       load();
     } catch (failure) {
       setError(failure);
+      setErrorKey(setting.key);
     }
   }
 
@@ -907,19 +979,163 @@ function SettingsPage({ notify, onCurrencyChange }) {
     <>
       <header className="page-head"><div><p className="eyebrow">Settings</p><h1>Commercial settings</h1></div></header>
       <p className="muted">Only values the owner has confirmed. Anything left unset keeps the dependent features switched off.</p>
-      <ErrorBanner error={error} />
+      {!errorKey && <ErrorBanner error={error} />}
       {settings?.map(setting => (
         <section key={setting.key} className="panel stack narrow">
-          <div className="row between"><h2>{setting.key}</h2>{setting.configured ? <span className="chip chip-published">set</span> : <span className="chip chip-draft">not set</span>}</div>
+          <div className="row between"><h2>{SETTING_TITLES[setting.key] ?? setting.key}</h2>{setting.configured ? <span className="chip chip-published">set</span> : <span className="chip chip-draft">not set</span>}</div>
           <p className="muted small">{setting.description}</p>
-          <div className="row">
-            <input aria-label={setting.key} maxLength={3} placeholder="e.g. GHS" value={drafts[setting.key] ?? ''} onChange={e => setDrafts({ ...drafts, [setting.key]: e.target.value })} />
-            <button className="btn primary" onClick={() => save(setting)}>Save</button>
-          </div>
-          {error?.fieldErrors?.value && <span className="field-error">{error.fieldErrors.value}</span>}
+          <SettingEditor setting={setting} draft={drafts[setting.key]} currency={currency} onChange={value => setDrafts({ ...drafts, [setting.key]: value })} />
+          <div className="row end"><button className="btn primary" onClick={() => save(setting)}>Save</button></div>
+          {errorKey === setting.key && <span className="field-error">{error.fieldErrors?.value ?? error.message}</span>}
           {setting.updatedAt && <span className="muted small">Last changed {formatDate(setting.updatedAt)}</span>}
         </section>
       ))}
+    </>
+  );
+}
+
+/* ---------- orders ---------- */
+
+const PAYMENT_LABELS = { pending_payment: 'Awaiting payment', paid: 'Paid', payment_expired: 'Expired', refund_pending: 'Refund pending', partially_refunded: 'Partly refunded', refunded: 'Refunded' };
+const PAYMENT_CHIPS = { pending_payment: 'chip-draft', paid: 'chip-published', payment_expired: 'chip-archived' };
+const FULFILMENT_LABELS = { not_started: 'Not started', processing: 'Processing', dispatched: 'Dispatched', delivered: 'Delivered', cancelled: 'Cancelled' };
+const FULFILMENT_NEXT = { not_started: ['start_processing', 'Start processing'], processing: ['dispatch', 'Mark dispatched'], dispatched: ['deliver', 'Mark delivered'] };
+const ATTENTION_LABELS = {
+  payment_mismatch: 'Paystack reported an amount or currency that does not match this order. It has not been marked paid. Check it in your Paystack dashboard.',
+  paid_without_stock: 'This order was paid after its hold expired, and the stock has since gone. Contact the customer, and restock or refund in Paystack.',
+};
+
+function Orders() {
+  const [status, setStatus] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const load = useCallback(async cursor => {
+    const params = new URLSearchParams({ ...(status && { paymentStatus: status }), ...(cursor && { cursor }) });
+    try {
+      const data = await api('GET', `/admin/orders?${params}`);
+      setResult(prev => (cursor ? { items: [...prev.items, ...data.items], nextCursor: data.nextCursor } : data));
+      setError(null);
+    } catch (failure) {
+      setError(failure);
+    }
+  }, [status]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <>
+      <header className="page-head"><div><p className="eyebrow">Retail</p><h1>Orders</h1></div></header>
+      <div className="toolbar">
+        <select aria-label="Filter by payment" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="">All payments</option>{Object.keys(PAYMENT_CHIPS).map(key => <option key={key} value={key}>{PAYMENT_LABELS[key]}</option>)}
+        </select>
+      </div>
+      <ErrorBanner error={error} />
+      {result && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfilment</th><th>Placed</th></tr></thead>
+            <tbody>
+              {result.items.map(order => (
+                <tr key={order.reference} onClick={() => go(`orders/${order.reference}`)} className="clickable">
+                  <td><a href={`#/orders/${order.reference}`} onClick={e => e.stopPropagation()}><strong>{order.reference}</strong></a>{order.attention && <span className="tag warn">needs attention</span>}</td>
+                  <td>{order.contact.name}</td>
+                  <td>{formatMoney(order.totalMinor, order.currency)}</td>
+                  <td><span className={`chip ${PAYMENT_CHIPS[order.paymentStatus] ?? 'chip-draft'}`}>{PAYMENT_LABELS[order.paymentStatus]}</span></td>
+                  <td>{FULFILMENT_LABELS[order.fulfilmentStatus]}</td>
+                  <td className="muted">{formatDate(order.createdAt)}</td>
+                </tr>
+              ))}
+              {result.items.length === 0 && <tr><td colSpan={6} className="empty-cell">No orders yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {result?.nextCursor && <button className="btn ghost" onClick={() => load(result.nextCursor)}>Load more</button>}
+    </>
+  );
+}
+
+function OrderDetail({ reference, can, notify, setReasonRequest }) {
+  const [order, setOrder] = useState(null);
+  const [error, setError] = useState(null);
+  const load = useCallback(() => api('GET', `/admin/orders/${reference}`).then(setOrder, setError), [reference]);
+  useEffect(() => { load(); }, [load]);
+  if (!order) return error ? <ErrorBanner error={error} /> : <p className="muted">Loading…</p>;
+
+  const next = order.paymentStatus === 'paid' ? FULFILMENT_NEXT[order.fulfilmentStatus] : null;
+  async function advance() {
+    setError(null);
+    try {
+      setOrder(await api('POST', `/admin/orders/${reference}/fulfilment`, { action: next[0], expectedVersion: order.version }));
+      notify('Order updated');
+    } catch (failure) {
+      setError(failure);
+    }
+  }
+  function cancel() {
+    setReasonRequest({
+      title: 'Cancel this unpaid order',
+      description: 'Held stock goes back on sale straight away. The customer can no longer pay for this order.',
+      confirmLabel: 'Cancel order',
+      onConfirm: async reason => {
+        setOrder(await api('POST', `/admin/orders/${reference}/cancel`, { expectedVersion: order.version, reason }));
+        notify('Order cancelled');
+      },
+    });
+  }
+  const canCancel = can('orders:fulfil') && order.paymentStatus !== 'paid' && order.fulfilmentStatus !== 'cancelled';
+  const { fulfilment, contact } = order;
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <a className="back" href="#/orders"><ArrowLeft size={15} /> Orders</a>
+          <h1>{order.reference}</h1>
+          <div className="row">
+            <span className={`chip ${PAYMENT_CHIPS[order.paymentStatus] ?? 'chip-draft'}`}>{PAYMENT_LABELS[order.paymentStatus]}</span>
+            <span className="muted small">{FULFILMENT_LABELS[order.fulfilmentStatus]} · placed {formatDate(order.createdAt)}</span>
+          </div>
+        </div>
+        <div className="row">
+          {canCancel && <button className="btn ghost" onClick={cancel}>Cancel order</button>}
+          {next && can('orders:fulfil') && <button className="btn primary" onClick={advance}>{next[1]}</button>}
+        </div>
+      </header>
+      <ErrorBanner error={error} />
+      {order.attention && <div className="banner warn"><AlertTriangle size={18} /><div><strong>Needs attention.</strong> <span>{ATTENTION_LABELS[order.attention] ?? order.attention}</span></div></div>}
+      <div className="editor-grid">
+        <section className="panel">
+          <h2>Items</h2>
+          <div className="table-wrap flush">
+            <table>
+              <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead>
+              <tbody>
+                {order.items.map(line => <tr key={line.sku}><td>{line.title}</td><td className="muted">{line.sku}</td><td>{line.quantity}</td><td>{formatMoney(line.unitPriceMinor, order.currency)}</td><td>{formatMoney(line.lineTotalMinor, order.currency)}</td></tr>)}
+              </tbody>
+            </table>
+          </div>
+          <dl className="store-status order-totals">
+            <div><dt>Subtotal</dt><dd>{formatMoney(order.subtotalMinor, order.currency)}</dd></div>
+            <div><dt>Delivery</dt><dd>{formatMoney(order.deliveryFeeMinor, order.currency)}</dd></div>
+            <div><dt>Total</dt><dd>{formatMoney(order.totalMinor, order.currency)}</dd></div>
+          </dl>
+        </section>
+        <aside className="stack">
+          <section className="panel">
+            <h2>Customer</h2>
+            <p>{contact.name}<br /><a className="link" href={`tel:${contact.phone.replace(/\s/g, '')}`}>{contact.phone}</a><br /><a className="link" href={`mailto:${contact.email}`}>{contact.email}</a></p>
+          </section>
+          <section className="panel">
+            <h2>{fulfilment.method === 'pickup' ? 'In-store collection' : `Delivery · ${fulfilment.zoneName}`}</h2>
+            {fulfilment.method === 'pickup'
+              ? <p className="muted small">{fulfilment.pickup.address}<br />{fulfilment.pickup.hours}</p>
+              : <p className="muted small">{fulfilment.address.digitalAddress}<br />{fulfilment.address.area}{fulfilment.address.landmark && <><br />{fulfilment.address.landmark}</>}</p>}
+          </section>
+          <section className="panel">
+            <h2>Stock</h2>
+            <p className="muted small">{order.stockDeducted ? 'Taken from stock when paid.' : order.stockHeld ? `Held until ${formatDate(order.reservationExpiresAt)}.` : 'Not holding stock.'}</p>
+          </section>
+        </aside>
+      </div>
     </>
   );
 }
@@ -997,6 +1213,8 @@ function Shell({ me, onSignOut }) {
   else if (section === 'products') page = <ProductList categories={categories} />;
   else if (section === 'inventory') page = <Inventory can={can} notify={setToast} />;
   else if (section === 'staff') page = <Staff me={me} notify={setToast} setReasonRequest={setReasonRequest} />;
+  else if (section === 'orders' && id) page = <OrderDetail reference={id} can={can} notify={setToast} setReasonRequest={setReasonRequest} />;
+  else if (section === 'orders') page = <Orders />;
   else if (section === 'settings') page = <SettingsPage notify={setToast} onCurrencyChange={setCurrency} />;
   else if (section === 'audit') page = <AuditLog />;
 
@@ -1016,7 +1234,7 @@ function Shell({ me, onSignOut }) {
         </div>
       </aside>
       <main className="content">
-        <div className="env-strip">Local environment · Illustrative fixtures · Checkout and hire-purchase applications are not connected</div>
+        <div className="env-strip">Local environment · Illustrative fixtures · Hire-purchase applications are not connected</div>
         {page}
       </main>
       <Toast message={toast} />

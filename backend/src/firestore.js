@@ -18,6 +18,8 @@ export const C = Object.freeze({
   idempotencyKeys: 'idempotencyKeys',
   rateLimits: 'rateLimits',
   settings: 'settings',
+  orders: 'orders', // doc id is the customer-facing reference
+  payments: 'payments', // verified provider payments, one per order reference
 });
 
 /**

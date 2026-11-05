@@ -10,13 +10,14 @@ export const ROLE_PERMISSIONS = Object.freeze({
   owner: [
     'catalogue:read', 'catalogue:write', 'catalogue:publish', 'catalogue:hire_purchase',
     'inventory:read', 'inventory:adjust', 'staff:manage', 'audit:read', 'settings:manage', 'dashboard:read',
+    'orders:read', 'orders:fulfil',
   ],
   catalogue_manager: ['catalogue:read', 'catalogue:write', 'catalogue:publish', 'inventory:read', 'inventory:adjust', 'dashboard:read'],
   // Approvers decide hire-purchase policy, so they control which products are eligible.
   approver: ['catalogue:read', 'catalogue:hire_purchase', 'dashboard:read'],
   assessor: ['catalogue:read', 'dashboard:read'],
-  finance: ['catalogue:read', 'inventory:read', 'dashboard:read'],
-  fulfilment: ['catalogue:read', 'inventory:read', 'dashboard:read'],
+  finance: ['catalogue:read', 'inventory:read', 'dashboard:read', 'orders:read'],
+  fulfilment: ['catalogue:read', 'inventory:read', 'dashboard:read', 'orders:read', 'orders:fulfil'],
 });
 
 export function permissionsFor(roles) {
@@ -50,6 +51,17 @@ export const INVENTORY_REASONS = Object.freeze({
 // Owner-configured commercial settings. Unset settings block the actions that depend on them.
 export const SETTINGS = Object.freeze({
   'store.currency': { description: 'ISO 4217 currency for every retail price. Required before any price can be set.' },
+  'checkout.deliveryZones': { description: 'Areas you deliver to and the fee for each. Customers choose one at checkout.' },
+  'checkout.pickup': { description: 'Store address and opening hours for in-store collection.' },
+  'checkout.reservationMinutes': { description: 'How long stock is held for an unpaid order before it is released.' },
+  'checkout.returnsPolicy': { description: 'Returns and warranty wording shown to customers at checkout.' },
+});
+
+// Fulfilment moves forward only. Cancelling is separate because it also releases stock.
+export const ORDER_FULFILMENT_TRANSITIONS = Object.freeze({
+  start_processing: { from: 'not_started', to: 'processing' },
+  dispatch: { from: 'processing', to: 'dispatched' },
+  deliver: { from: 'dispatched', to: 'delivered' },
 });
 
 // Retail and hire-purchase states (milestones 3–5). Declared now so the contract is stable.
@@ -64,6 +76,7 @@ export const ERROR_CODES = Object.freeze({
   invalid_json: 400,
   unsupported_media_type: 415,
   unauthenticated: 401,
+  invalid_signature: 401,
   invalid_credentials: 401,
   forbidden: 403,
   csrf_failed: 403,
@@ -72,6 +85,10 @@ export const ERROR_CODES = Object.freeze({
   conflict: 409,
   invalid_transition: 409,
   insufficient_stock: 409,
+  item_unavailable: 409,
+  price_changed: 409,
+  order_expired: 409,
+  refund_required: 409,
   idempotency_key_reused: 409,
   slug_locked: 409,
   currency_in_use: 409,
@@ -82,5 +99,6 @@ export const ERROR_CODES = Object.freeze({
   commercial_setting_missing: 422,
   rate_limited: 429,
   internal_error: 500,
+  payment_provider_error: 502,
   not_configured: 503,
 });

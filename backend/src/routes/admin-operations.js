@@ -4,9 +4,19 @@ import { requireStaff } from '../auth.js';
 import { getSetting, stockOf } from '../catalogue.js';
 import { C, now, transaction } from '../firestore.js';
 import { decodeCursor, encodeCursor, fail, parseLimit } from '../http.js';
-import { currency, int, nullable, validate } from '../validate.js';
+import { SLUG, arrayOf, currency, int, nullable, shape, str, validate } from '../validate.js';
 
-const SETTING_RULES = { 'store.currency': currency() };
+const SETTING_RULES = {
+  'store.currency': currency(),
+  'checkout.deliveryZones': arrayOf(shape({
+    id: str({ max: 60, pattern: SLUG, patternMessage: 'Use lowercase letters, numbers and hyphens.' }),
+    name: str({ max: 80 }),
+    feeMinor: int({ min: 0, max: 100_000_000 }),
+  }), { max: 50 }),
+  'checkout.pickup': shape({ address: str({ max: 300 }), hours: str({ max: 200 }) }),
+  'checkout.reservationMinutes': int({ min: 5, max: 1440 }),
+  'checkout.returnsPolicy': str({ max: 2000 }),
+};
 
 const settingDto = (key, data) => ({
   key, description: SETTINGS[key].description, value: data?.value ?? null, configured: (data?.value ?? null) !== null,
@@ -38,7 +48,7 @@ export function registerAdminOperations(route) {
         },
         settingsMissing: Object.keys(SETTINGS).filter(key => !configured.has(key)),
         // Modules that need owner decisions before they can be built or switched on.
-        unavailable: ['retail_checkout', 'hire_purchase_applications', 'agreements', 'payments'],
+        unavailable: ['hire_purchase_applications', 'agreements'],
       },
     };
   });

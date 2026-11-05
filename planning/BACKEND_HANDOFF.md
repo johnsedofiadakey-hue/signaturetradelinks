@@ -10,7 +10,7 @@ Prepared 5 November 2026 by Claude in response to `CLAUDE_BACKEND_BLUEPRINT.md`.
 | API server | `backend/src/` | Node 22+, `node:http` handler on Firestore via `firebase-admin`. Runs as the Cloud Function `api` (`backend/src/function.js`, europe-west1) behind Firebase Hosting's `/api/**` rewrite, or locally with `npm run api`. Base `/api/v1`. |
 | Firebase config | `firebase.json`, `firestore.rules`, `firestore.indexes.json` | Firestore in europe-west1. Rules deny all client access; only the API reads and writes. |
 | Admin portal | `admin/` → served at `/admin/` | React + Vite (second entry in `vite.config.js`). Sign-in, invite acceptance, overview, catalogue, SKUs/prices, inventory ledger, staff/roles, settings, audit log. |
-| Tests | `backend/test/` | 39 tests run with `npm test` against the Firestore emulator. Each suite gets its own emulator project. |
+| Tests | `backend/test/` | Run with `npm test` against the Firestore emulator. Each suite gets its own emulator project. |
 | Tooling | `backend/scripts/` | Owner bootstrap, test-only fixture seeding. |
 
 The customer storefront now reads the public API through `src/services/catalogue.js` (milestone 6, catalogue part):
@@ -21,6 +21,33 @@ The customer storefront now reads the public API through `src/services/catalogue
 - **Search and filters:** these run in the browser over the loaded catalogue. That's fine at this size; switch to the server's `q`/`category` parameters if the catalogue grows to hundreds of products.
 - **Order:** products are listed alphabetically, as the API returns them. The earlier hand-picked order is gone; add a `sortOrder` field if the owner wants a curated order.
 - **Not changed:** the bag still lives only in the browser and checkout is not open. Customer accounts, order and application screens wait on milestones 3–5.
+
+## Retail checkout
+
+Built and tested locally on 5 November 2026. **Not live until the steps below are done.**
+
+- **Customer flow:** `/checkout` takes contact details, then delivery (zone and GhanaPostGPS address) or in-store collection, then sends the customer to Paystack's hosted page. `/order/:reference` shows the result. Guests only; there are no customer accounts in retail.
+- **Prices:** the browser sends SKUs and quantities, and the server prices everything. An order is refused with `price_changed` if the total moved after the customer saw it.
+- **Stock:** held when the order is placed, deducted with a `retail_sale` ledger entry when payment is verified, and released by the `releaseExpiredOrders` job (every 5 minutes) if unpaid when the hold ends.
+- **Paid status:** only a signed Paystack webhook or a server-side verify call can set it. Returning to the order page proves nothing. An amount or currency mismatch is flagged for staff and not marked paid. A payment arriving after stock was resold is flagged `paid_without_stock`.
+- **Order access:** each order has a private token kept in the customer's browser and stored hashed on the server. A wrong token looks like a missing order, so the order page only works on the device that placed the order.
+- **Admin:** Orders list and detail, fulfilment steps, cancelling unpaid orders, and forms for each checkout setting.
+- **Closed until configured:** the storefront shows "Checkout opens soon" until the currency, a delivery zone or pickup point, the hold time, the returns wording and the Paystack key are all set. Products without a priced SKU show "Not on sale yet".
+
+**Not built:** refunds (cancelling a paid order returns `refund_required`, so refund in the Paystack dashboard), customer order emails (needs an email provider), and a way to reopen an order on another device.
+
+**Tested against:** a scripted stand-in for Paystack, in both the test suite and the browser check. Real Paystack calls have not run yet, so place one order with test keys before taking real payments.
+
+### To turn it on
+
+1. Set the key. `backend/src/function.js` declares this secret, so the function cannot deploy until it exists. Use the Paystack test key first:
+   ```sh
+   firebase functions:secrets:set PAYSTACK_SECRET_KEY --project signaturetradelinks
+   ```
+2. Deploy functions, Firestore indexes and hosting.
+3. In the Paystack dashboard, set the webhook URL to `https://signaturetradelinks.web.app/api/v1/webhooks/paystack`.
+4. In admin, under Settings, enter the currency (GHS), delivery areas and fees, pickup address and hours, hold time, and returns wording.
+5. Price and stock at least one product, place a test order, then switch to the live key.
 
 ## Run locally
 

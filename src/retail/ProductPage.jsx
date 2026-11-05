@@ -51,6 +51,8 @@ export default function ProductPage({ slug }) {
   const needsChoice = variants.length > 1 && !variant;
   const price = variant ? { ...variant.price, varies: false } : product.price;
   const outOfStock = variant ? variant.availability === 'out_of_stock' : product.availability === 'out_of_stock';
+  // Only a priced SKU can be checked out. Until staff price this product, it can be viewed but not bought.
+  const unpriced = detailStatus !== 'loading' && variants.length === 0;
 
   return (
     <main className="pdp section">
@@ -90,8 +92,8 @@ export default function ProductPage({ slug }) {
               <span aria-live="polite">{quantity}</span>
               <button type="button" onClick={() => setQuantity(q => Math.min(10, q + 1))} aria-label="One more"><Plus size={14} /></button>
             </div>
-            <button className="button dark grow" disabled={outOfStock || needsChoice} onClick={() => add(product, { sku: variant?.sku ?? null, price, quantity })}>
-              {needsChoice ? 'Choose an option' : 'Add to bag'} <ShoppingBag size={18} />
+            <button className="button dark grow" disabled={outOfStock || needsChoice || unpriced || detailStatus === 'loading'} onClick={() => add(product, { sku: variant?.sku ?? null, price, quantity })}>
+              {unpriced ? 'Not on sale yet' : needsChoice ? 'Choose an option' : 'Add to bag'} <ShoppingBag size={18} />
             </button>
           </div>
           <p className="muted small">Pay in full at checkout. Delivery or in-store collection is chosen there.</p>

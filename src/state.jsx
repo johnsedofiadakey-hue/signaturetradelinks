@@ -1,6 +1,7 @@
 // Shared storefront state: the catalogue (loaded once for both stores) and the retail bag.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { loadCatalogue } from './services/catalogue';
+import { loadCheckoutOptions } from './services/checkout';
 
 const CatalogueContext = createContext(null);
 const BagContext = createContext(null);
@@ -16,13 +17,15 @@ function readBag() {
 }
 
 export function StoreProvider({ children }) {
-  const [catalogue, setCatalogue] = useState({ status: 'loading', source: null, categories: [], products: [] });
+  const [catalogue, setCatalogue] = useState({ status: 'loading', source: null, categories: [], products: [], checkoutOpen: false });
   const [bag, setBag] = useState(readBag);
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
-    loadCatalogue(controller.signal).then(data => setCatalogue({ status: 'ready', ...data }), () => {});
+    loadCatalogue(controller.signal).then(data => setCatalogue(current => ({ ...current, status: 'ready', ...data })), () => {});
+    // Preview wording stays up until the store can actually take orders.
+    loadCheckoutOptions(controller.signal).then(({ canOrder }) => setCatalogue(current => ({ ...current, checkoutOpen: canOrder })), () => {});
     return () => controller.abort();
   }, []);
 
@@ -47,10 +50,11 @@ export function StoreProvider({ children }) {
     });
     setNotice(`${product.name} added to your bag`);
   }, []);
+  const clear = useCallback(() => setBag([]), []);
   const changeQuantity = useCallback((key, delta) => setBag(items => items.map(item => (item.key === key ? { ...item, quantity: item.quantity + delta } : item)).filter(item => item.quantity > 0)), []);
   const remove = useCallback(key => setBag(items => items.filter(item => item.key !== key)), []);
 
-  const bagValue = useMemo(() => ({ items: bag, count: bag.reduce((sum, item) => sum + item.quantity, 0), add, changeQuantity, remove, notice, setNotice }), [bag, add, changeQuantity, remove, notice]);
+  const bagValue = useMemo(() => ({ items: bag, count: bag.reduce((sum, item) => sum + item.quantity, 0), add, changeQuantity, remove, clear, notice, setNotice }), [bag, add, changeQuantity, remove, clear, notice]);
 
   return (
     <CatalogueContext.Provider value={catalogue}>

@@ -89,10 +89,14 @@ export function HelpDialog({ onClose }) {
 }
 
 export function PreviewStrip() {
-  const { products } = useCatalogue();
+  const { products, checkoutOpen } = useCatalogue();
+  const illustrative = products.some(p => p.illustrative);
+  if (checkoutOpen && !illustrative) return null;
   return (
     <div className="preview-strip">
-      DESIGN PREVIEW <span>{products.some(p => p.illustrative) && 'Illustrative products & imagery · '}{products.some(p => !p.price) && 'Some prices to be confirmed · '}No live orders</span>
+      {checkoutOpen
+        ? <span>Some products and images are illustrative</span>
+        : <>DESIGN PREVIEW <span>{illustrative && 'Illustrative products & imagery · '}{products.some(p => !p.price) && 'Some prices to be confirmed · '}No live orders</span></>}
     </div>
   );
 }

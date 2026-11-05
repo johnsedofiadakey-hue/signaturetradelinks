@@ -19,5 +19,9 @@ export function loadConfig(env = process.env) {
     // Behind Firebase Hosting the client address arrives in X-Forwarded-For.
     trustProxy: live || env.STL_TRUST_PROXY === '1',
     logRequests: env.STL_LOG_REQUESTS !== '0',
+    // Unset means online payment is not configured, and orders are refused rather than taken without a way to pay.
+    paystackSecretKey: env.PAYSTACK_SECRET_KEY || null,
+    // Orders one visitor can place per hour. Each order holds stock until it is paid or expires.
+    orderRateLimit: Number(env.STL_ORDER_RATE_LIMIT ?? 10),
   };
 }

@@ -14,28 +14,33 @@ export const fail = (code, message, extra) => { throw new ApiError(code, message
 
 const MAX_BODY_BYTES = 100_000;
 
-export async function readJson(req) {
-  if (req.method === 'GET' || req.method === 'HEAD') return undefined;
-  const chunks = [];
-  let size = 0;
+/** The request body as bytes. Webhook signatures are computed over exactly these bytes. */
+export async function readRaw(req) {
   if (Buffer.isBuffer(req.rawBody)) {
     // Cloud Functions has already consumed the stream and exposes the bytes as rawBody.
-    size = req.rawBody.length;
-    if (size > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
-    chunks.push(req.rawBody);
-  } else {
-    for await (const chunk of req) {
-      size += chunk.length;
-      if (size > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
-      chunks.push(chunk);
-    }
+    if (req.rawBody.length > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
+    return req.rawBody;
   }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+export async function readJson(req) {
+  if (req.method === 'GET' || req.method === 'HEAD') return undefined;
+  const raw = await readRaw(req);
+  const size = raw.length;
   if (size === 0) return {};
   const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
   // Requiring JSON forces a CORS preflight for cross-site browser requests.
   if (type !== 'application/json') fail('unsupported_media_type', 'Requests must be sent as JSON.');
   try {
-    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const body = JSON.parse(raw.toString('utf8'));
     if (body === null || typeof body !== 'object' || Array.isArray(body)) fail('bad_request', 'The request body must be a JSON object.');
     return body;
   } catch (error) {

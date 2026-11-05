@@ -11,11 +11,11 @@ export const OWNER = { email: 'owner@example.test', displayName: 'Test Owner', p
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Run tests with `npm test` so they use the Firestore emulator.');
 
 /** Start an API server on an ephemeral port backed by its own emulator project, so every suite starts empty. */
-export async function startTestServer() {
+export async function startTestServer({ payments, config: overrides } = {}) {
   const projectId = `demo-stl-${randomUUID().slice(0, 8)}`;
   const db = openFirestore(projectId);
-  const config = { ...loadConfig({}), projectId, logRequests: false };
-  const server = createServer(createApp({ db, config, log: { error: console.error, info() {} } }));
+  const config = { ...loadConfig({}), projectId, logRequests: false, orderRateLimit: 1000, ...overrides };
+  const server = createServer(createApp({ db, config, log: { error: console.error, info() {} }, ...(payments ? { payments } : {}) }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}/api/v1`;
   await bootstrapOwner(db, OWNER);

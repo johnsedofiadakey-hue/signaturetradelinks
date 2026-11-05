@@ -11,6 +11,7 @@ import HirePurchaseHome from './hire-purchase/HirePurchaseHome';
 import HirePurchaseProduct from './hire-purchase/HirePurchaseProduct';
 import BagDialog from './retail/BagDialog';
 import Checkout from './retail/Checkout';
+import OrderPage from './retail/OrderPage';
 import ProductPage, { NotFound } from './retail/ProductPage';
 import RetailHome from './retail/RetailHome';
 import { match, navigate, useLocation } from './router';
@@ -22,7 +23,7 @@ function useTitle(title) {
 
 function App() {
   const { path, search } = useLocation();
-  const { products } = useCatalogue();
+  const { products, checkoutOpen } = useCatalogue();
   const [help, setHelp] = useState(false);
   const [bagOpen, setBagOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -40,6 +41,7 @@ function App() {
   if (path === '/' || path === '') { page = <RetailHome search={search} query={query} onResetQuery={() => setQuery('')} />; }
   else if (productSlug) { page = <ProductPage slug={productSlug} />; title = nameOf(productSlug); }
   else if (match('/checkout', path)) { page = <Checkout />; title = 'Checkout'; }
+  else if (match('/order/:reference', path)) { page = <OrderPage reference={match('/order/:reference', path).reference} search={search} />; title = 'Your order'; }
   else if (match('/hire-purchase', path)) { page = <HirePurchaseHome />; title = 'Hire purchase'; }
   else if (hpSlug) { page = <HirePurchaseProduct slug={hpSlug} />; title = `${nameOf(hpSlug) ?? 'Product'} · Hire purchase`; }
   else if (match('/hire-purchase/apply', path)) { page = <Apply search={search} />; title = 'Apply for hire purchase'; }
@@ -57,7 +59,7 @@ function App() {
       <PreviewStrip />
       {hirePurchase ? <HirePurchaseHeader onHelp={openHelp} /> : <RetailHeader onHelp={openHelp} onBag={() => setBagOpen(true)} query={query} onQuery={onQuery} />}
       {page}
-      <Footer onHelp={openHelp} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : 'Design preview · Catalogue & policies awaiting confirmation'} />
+      <Footer onHelp={openHelp} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : checkoutOpen ? '' : 'Design preview · Catalogue & policies awaiting confirmation'} />
       <Toast />
       {help && <HelpDialog onClose={closeHelp} />}
       {bagOpen && <BagDialog onClose={closeBag} />}

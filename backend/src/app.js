@@ -7,7 +7,10 @@ import { registerAdminCatalogue } from './routes/admin-catalogue.js';
 import { registerAdminInventory } from './routes/admin-inventory.js';
 import { registerAdminStaff } from './routes/admin-staff.js';
 import { registerAdminOperations } from './routes/admin-operations.js';
+import { registerCheckout } from './routes/checkout.js';
+import { registerAdminOrders } from './routes/admin-orders.js';
 import { registerUnavailable } from './routes/unavailable.js';
+import { paystackProvider } from './paystack.js';
 
 function compile(path) {
   const keys = [];
@@ -16,7 +19,7 @@ function compile(path) {
 }
 
 /** Build the API request handler. Everything stateful is injected so tests can run against isolated emulator projects. */
-export function createApp({ db, config, log = console }) {
+export function createApp({ db, config, log = console, payments = paystackProvider({ secretKey: config.paystackSecretKey, log }) }) {
   const routes = [];
   const route = (method, path, handler, options = {}) => routes.push({ method, path, handler, options, ...compile(path) });
 
@@ -26,6 +29,8 @@ export function createApp({ db, config, log = console }) {
   registerAdminInventory(route);
   registerAdminStaff(route);
   registerAdminOperations(route);
+  registerCheckout(route, db, payments, config);
+  registerAdminOrders(route);
   registerUnavailable(route);
 
   function match(method, pathname) {

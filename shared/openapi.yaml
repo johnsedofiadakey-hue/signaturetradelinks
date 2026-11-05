@@ -392,9 +392,52 @@ paths:
         - $ref: '#/components/parameters/Limit'
       responses: { '200': { description: Newest first; append-only } }
 
-  /checkout/quote: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /orders: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /orders/{id}/payments: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /checkout/options:
+    get:
+      summary: What the customer can choose at checkout, and whether the store can take orders
+      description: canOrder stays false until the currency, a delivery zone or pickup point, the hold time, the returns wording and the payment provider are all configured. `missing` names what is left.
+      responses: { '200': { description: "{ canQuote, canOrder, missing[], currency, deliveryZones[{id,name,feeMinor}], pickup{address,hours}, reservationMinutes, returnsPolicy }" } }
+  /checkout/quote:
+    post:
+      summary: Price a basket from SKUs and quantities
+      description: 'Body: { items[{sku,quantity}], fulfilment: {method:pickup} | {method:delivery,zoneId} }. The server sets every price.'
+      responses:
+        '200': { description: "{ items[], currency, subtotalMinor, deliveryFeeMinor, totalMinor }" }
+        '409': { description: item_unavailable or insufficient stock }
+  /orders:
+    post:
+      summary: Place a guest order and hold its stock
+      description: 'Body: { items, fulfilment, contact{name,phone,email}, address{digitalAddress,area,landmark} (delivery only), expectedTotalMinor }. Refused with price_changed if the total moved after the customer saw it. Stock is held until reservationExpiresAt.'
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201': { description: "{ order, accessToken }. The token is shown once; only its hash is stored." }
+        '409': { description: price_changed, item_unavailable or insufficient stock }
+        '429': { description: Too many orders from this address }
+  /orders/{reference}:
+    get:
+      summary: Read an order with its private token
+      description: Requires the X-Order-Token header. A wrong token returns 404, the same as a missing order.
+      parameters: [{ name: reference, in: path, required: true, schema: { type: string } }, { name: X-Order-Token, in: header, required: true, schema: { type: string } }]
+      responses: { '200': { description: The order }, '404': { description: Not found } }
+  /orders/{reference}/payments:
+    post:
+      summary: Start paying on Paystack's hosted page
+      parameters: [{ name: reference, in: path, required: true, schema: { type: string } }, { name: X-Order-Token, in: header, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: "{ authorizationUrl }" }
+        '409': { description: order_expired or invalid_transition (already paid) }
+        '502': { description: payment_provider_error }
+        '503': { description: not_configured }
+  /orders/{reference}/payments/verify:
+    post:
+      summary: Ask Paystack what happened, apply it, and return the order
+      parameters: [{ name: reference, in: path, required: true, schema: { type: string } }, { name: X-Order-Token, in: header, required: true, schema: { type: string } }]
+      responses: { '200': { description: The order }, '404': { description: Not found } }
+  /webhooks/paystack:
+    post:
+      summary: Paystack events, verified by HMAC-SHA512 of the raw body in X-Paystack-Signature
+      description: Amount or currency mismatches are flagged for staff and never marked paid.
+      responses: { '200': { description: Received }, '401': { description: invalid_signature } }
   /me/orders: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
   /me/orders/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
   /hire-purchase/applications: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
@@ -411,5 +454,26 @@ paths:
   /admin/applications: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
   /admin/applications/{id}/transitions: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
   /admin/applications/{id}/offers: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /admin/orders: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/orders:
+    get:
+      summary: List orders, newest first
+      parameters: [{ name: paymentStatus, in: query, schema: { type: string } }]
+      responses: { '200': { description: A page of orders } }
+  /admin/orders/{reference}:
+    get:
+      summary: One order with its payment record
+      parameters: [{ name: reference, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: The order }, '404': { description: Not found } }
+  /admin/orders/{reference}/fulfilment:
+    post:
+      summary: Move a paid order on
+      description: 'Body: { action: start_processing | dispatch | deliver, expectedVersion }. Requires orders:fulfil.'
+      parameters: [{ name: reference, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: The order }, '409': { description: invalid_transition or version_conflict } }
+  /admin/orders/{reference}/cancel:
+    post:
+      summary: Cancel an unpaid order and release its stock
+      description: 'Body: { expectedVersion, reason }. A paid order returns refund_required; refunds are not built yet.'
+      parameters: [{ name: reference, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: The order }, '409': { description: refund_required or version_conflict } }
   /admin/payments: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
