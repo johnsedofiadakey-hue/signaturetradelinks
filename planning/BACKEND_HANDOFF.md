@@ -108,9 +108,15 @@ Not verified: real-device testing, a full accessibility audit, load testing and 
 
 ## Deployment state (5 Nov 2026)
 
-- **Done:** the Firestore database exists in europe-west1, and its rules and indexes are deployed.
-- **Blocked:** the first deploy of the `api` function failed at the build step. The project's build service account (`173781217052-compute@developer.gserviceaccount.com`) lacks `roles/cloudbuild.builds.builder`, which is common on new Google Cloud projects. The owner must grant it.
-- **Not yet changed:** Firebase did not release the new hosting config, so the live site still runs the earlier storefront-only release.
+- **Live:** https://signaturetradelinks.web.app (storefront) and https://signaturetradelinks.web.app/admin/ (admin portal). Hosting rewrites `/api/**` to the `api` function (Cloud Functions v2, europe-west1, Node 22).
+- **Firestore:** europe-west1. Rules (deny all client access) and indexes are deployed. The catalogue is seeded with the 6 illustrative, unpriced products.
+- **IAM grants made:**
+  - `roles/cloudbuild.builds.builder` on the build service account `173781217052-compute@developer.gserviceaccount.com`, so the function can build.
+  - A dedicated runtime service account `stl-api@signaturetradelinks.iam.gserviceaccount.com` holding only `roles/datastore.user`. The function runs as this account (`backend/src/function.js`), not the default compute account.
+- **Artifact cleanup:** container images in europe-west1 are deleted after 3 days (`firebase functions:artifacts:setpolicy`).
+- **Verified live:** public products/categories return 200, the storefront renders API data (no offline note), a bad login returns 401, and `/admin/` loads.
+- **Not done (owner):** no staff account exists on live yet. The owner creates it with `npm run admin:bootstrap -- --project signaturetradelinks ...` so the password never passes through anyone else.
+- **Not done:** Firestore TTL policies for `sessions`, `rateLimits` and `idempotencyKeys` (expired rows are ignored, but not yet purged), scheduled Firestore backups, a custom domain, and alerting.
 
 ## Next milestones and what blocks them
 

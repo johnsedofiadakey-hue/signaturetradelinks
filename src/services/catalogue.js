@@ -8,7 +8,8 @@ const API = '/api/v1';
 const slugify = text => text.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 async function get(path, signal) {
-  const response = await fetch(`${API}${path}`, { signal, headers: { Accept: 'application/json' } });
+  // no-store: never reuse a cached response, e.g. a hosting 404 cached before the API was deployed.
+  const response = await fetch(`${API}${path}`, { signal, cache: 'no-store', headers: { Accept: 'application/json' } });
   const body = await response.json().catch(() => null);
   if (!response.ok || !body?.data) throw new Error(body?.error?.message ?? `Catalogue request failed (${response.status})`);
   return body.data;

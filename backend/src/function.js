@@ -7,4 +7,13 @@ import { openFirestore } from './firestore.js';
 const config = loadConfig();
 const handler = createApp({ db: openFirestore(), config });
 
-export const api = onRequest({ region: 'europe-west1', memory: '512MiB', concurrency: 40, maxInstances: 5, timeoutSeconds: 30, invoker: 'public' }, handler);
+// Runs as a dedicated service account that holds only roles/datastore.user (Firestore read/write).
+export const api = onRequest({
+  region: 'europe-west1',
+  serviceAccount: 'stl-api@signaturetradelinks.iam.gserviceaccount.com',
+  memory: '512MiB',
+  concurrency: 40,
+  maxInstances: 5,
+  timeoutSeconds: 30,
+  invoker: 'public',
+}, handler);

@@ -11,7 +11,7 @@
       "runtime": "nodejs22",
       "ignore": [
         "node_modules", ".git", ".firebase", ".claude", "firebase-debug.log", "firestore-debug.log",
-        "dist", "src", "admin", "public", "outputs", "planning", "backend/test", "backend/scripts", "backend/.emulator-data"
+        "dist/**", "src/**", "admin/**", "public/**", "outputs/**", "planning/**", "backend/test/**", "backend/scripts/**", "backend/.emulator-data/**"
       ]
     }
   ],
