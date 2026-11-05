@@ -70,10 +70,22 @@ describe('inventory ledger', () => {
     assert.equal(after.onHand, 0);
   });
 
-  test('the ledger is append-only at the database level', () => {
-    assert.throws(() => server.db.prepare('UPDATE inventory_movements SET quantity = 999').run(), /immutable/);
-    assert.throws(() => server.db.prepare('DELETE FROM inventory_movements').run(), /immutable/);
-    assert.throws(() => server.db.prepare('DELETE FROM audit_events').run(), /immutable/);
+  test('Firestore rules deny all direct client access to the ledger and audit log', async () => {
+    // Requests without the emulator's admin bearer token are evaluated against firestore.rules.
+    const root = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${server.projectId}/databases/(default)/documents`;
+    const movements = await server.db.collection('inventoryMovements').limit(1).get();
+    const read = await fetch(`${root}/inventoryMovements/${movements.docs[0].id}`);
+    assert.equal(read.status, 403);
+    const write = await fetch(`${root}/auditEvents?documentId=forged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { action: { stringValue: 'forged' } } }) });
+    assert.equal(write.status, 403);
+  });
+
+  test('stock counters always equal the sum of the ledger', async () => {
+    const [movements, sku] = await Promise.all([
+      server.db.collection('inventoryMovements').where('sku', '==', SKU).get(),
+      server.db.collection('skus').doc(SKU).get(),
+    ]);
+    assert.equal(sku.data().onHand, movements.docs.reduce((sum, doc) => sum + doc.data().quantity, 0));
   });
 
   test('fulfilment can view stock but not adjust it', async () => {

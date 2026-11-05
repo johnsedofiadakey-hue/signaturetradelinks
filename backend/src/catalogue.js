@@ -1,61 +1,111 @@
-import { json, now } from './db.js';
+import { C, read, readAll } from './firestore.js';
 
-export function getSetting(db, key) {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
-  return row ? JSON.parse(row.value) : null;
+export async function getSetting(db, key, tx) {
+  const snap = await read(db.collection(C.settings).doc(key), tx);
+  return snap.exists ? snap.data().value ?? null : null;
 }
 
-/** On-hand, reserved and available quantities for the given SKUs (all SKUs when omitted). */
-export function stockLevels(db, skus) {
-  const at = now();
-  const filter = skus ? `WHERE v.sku IN (${skus.map(() => '?').join(',') || "''"})` : '';
-  const rows = db.prepare(`
-    SELECT v.sku,
-      COALESCE((SELECT SUM(m.quantity) FROM inventory_movements m WHERE m.sku = v.sku), 0) AS on_hand,
-      COALESCE((SELECT SUM(r.quantity) FROM reservations r WHERE r.sku = v.sku AND r.status = 'active' AND r.expires_at > ?), 0) AS reserved
-    FROM variants v ${filter}`).all(at, ...(skus ?? []));
-  return new Map(rows.map(row => [row.sku, { onHand: row.on_hand, reserved: row.reserved, available: row.on_hand - row.reserved }]));
+export const stockOf = data => {
+  const onHand = data?.onHand ?? 0;
+  const reserved = data?.reserved ?? 0;
+  return { onHand, reserved, available: onHand - reserved };
+};
+
+/** Map of SKU → { onHand, reserved, available } from the per-SKU counter docs. */
+export async function stockLevels(db, skus, tx) {
+  const snaps = await readAll(db, [...new Set(skus)].map(sku => db.collection(C.skus).doc(sku)), tx);
+  return new Map(snaps.map(snap => [snap.id, stockOf(snap.data())]));
 }
 
-export const categoryDto = row => ({
-  id: row.id, slug: row.slug, label: row.label, sortOrder: row.sort_order, published: Boolean(row.published), version: row.version,
+const byCreated = (a, b) => (a.createdAt === b.createdAt ? (a.id < b.id ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1);
+
+export const categoryDto = (id, d) => ({ id, slug: d.slug, label: d.label, sortOrder: d.sortOrder, published: d.published, version: d.version });
+
+export const variantDto = (id, d, stock) => ({
+  id,
+  productId: d.productId,
+  sku: d.sku,
+  attributes: d.attributes,
+  retailPriceMinor: d.retailPriceMinor,
+  currency: d.currency,
+  active: d.active,
+  stock: stock ?? stockOf(),
+  version: d.version,
+  createdAt: d.createdAt,
+  updatedAt: d.updatedAt,
 });
 
-export const variantDto = (row, stock) => ({
-  id: row.id,
-  productId: row.product_id,
-  sku: row.sku,
-  attributes: json(row.attributes),
-  retailPriceMinor: row.retail_price_minor,
-  currency: row.currency,
-  active: Boolean(row.active),
-  stock: stock ?? { onHand: 0, reserved: 0, available: 0 },
-  version: row.version,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
+/** Product fields only (no variants); used for audit snapshots and as the base of the admin DTO. */
+export const productFields = (id, d) => ({
+  id,
+  slug: d.slug,
+  title: d.title,
+  description: d.description,
+  tagline: d.tagline,
+  categoryId: d.categoryId,
+  brand: d.brand,
+  specifications: d.specifications,
+  images: d.images,
+  illustration: d.illustration,
+  publishStatus: d.publishStatus,
+  hirePurchaseEnabled: d.hirePurchaseEnabled,
+  illustrative: d.illustrative,
+  version: d.version,
+  createdAt: d.createdAt,
+  updatedAt: d.updatedAt,
 });
 
-export function adminProductDto(db, row) {
-  const variants = db.prepare('SELECT * FROM variants WHERE product_id = ? ORDER BY created_at, id').all(row.id);
-  const stock = stockLevels(db, variants.map(v => v.sku));
+/** Admin DTOs for products, with variants and stock, in as few reads as possible. */
+export async function adminProductDtos(db, productDocs) {
+  if (!productDocs.length) return [];
+  const ids = productDocs.map(doc => doc.id);
+  const variantDocs = [];
+  // Firestore "in" filters accept at most 30 values.
+  for (let i = 0; i < ids.length; i += 30) {
+    variantDocs.push(...(await db.collection(C.variants).where('productId', 'in', ids.slice(i, i + 30)).get()).docs);
+  }
+  const stock = await stockLevels(db, variantDocs.map(doc => doc.data().sku));
+  const variantsByProduct = new Map();
+  for (const doc of variantDocs) {
+    const list = variantsByProduct.get(doc.data().productId) ?? [];
+    list.push(variantDto(doc.id, doc.data(), stock.get(doc.data().sku)));
+    variantsByProduct.set(doc.data().productId, list);
+  }
+  return productDocs.map(doc => ({ ...productFields(doc.id, doc.data()), variants: (variantsByProduct.get(doc.id) ?? []).sort(byCreated) }));
+}
+
+export async function adminProductDto(db, id) {
+  const doc = await db.collection(C.products).doc(id).get();
+  return (await adminProductDtos(db, [doc]))[0];
+}
+
+/**
+ * Everything the public catalogue needs in four reads. Sized for a catalogue of up to a few hundred
+ * products; beyond that, move to denormalised summary docs.
+ */
+export async function loadPublicCatalogue(db) {
+  const [products, categories, variants, storeCurrency] = await Promise.all([
+    db.collection(C.products).where('publishStatus', '==', 'published').get(),
+    db.collection(C.categories).where('published', '==', true).get(),
+    db.collection(C.variants).where('active', '==', true).get(),
+    getSetting(db, 'store.currency'),
+  ]);
+  const categoriesById = new Map(categories.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+  const stock = await stockLevels(db, variants.docs.map(doc => doc.data().sku));
+  const variantsByProduct = new Map();
+  for (const doc of variants.docs) {
+    const list = variantsByProduct.get(doc.data().productId) ?? [];
+    list.push({ id: doc.id, ...doc.data() });
+    variantsByProduct.set(doc.data().productId, list);
+  }
   return {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    description: row.description,
-    tagline: row.tagline,
-    categoryId: row.category_id,
-    brand: row.brand,
-    specifications: json(row.specifications),
-    images: json(row.images),
-    illustration: row.illustration,
-    publishStatus: row.publish_status,
-    hirePurchaseEnabled: Boolean(row.hire_purchase_enabled),
-    illustrative: Boolean(row.illustrative),
-    variants: variants.map(v => variantDto(v, stock.get(v.sku))),
-    version: row.version,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    categories: [...categoriesById.values()],
+    products: products.docs
+      .filter(doc => categoriesById.has(doc.data().categoryId))
+      .map(doc => ({ id: doc.id, ...doc.data(), category: categoriesById.get(doc.data().categoryId) })),
+    variantsByProduct,
+    stock,
+    storeCurrency,
   };
 }
 
@@ -63,41 +113,39 @@ export function adminProductDto(db, row) {
 const RETAIL_UNAVAILABLE = { available: false, reason: 'checkout_not_configured' };
 
 /** Public summary/detail. Only confirmed prices in the configured store currency are exposed. */
-export function publicProductDto(db, row, { detail = false } = {}) {
-  const storeCurrency = getSetting(db, 'store.currency');
-  const variants = db.prepare('SELECT * FROM variants WHERE product_id = ? AND active = 1 ORDER BY created_at, id').all(row.id);
-  const stock = stockLevels(db, variants.map(v => v.sku));
-  const priced = variants.filter(v => v.retail_price_minor !== null && storeCurrency && v.currency === storeCurrency);
-  const fromPrice = priced.length ? Math.min(...priced.map(v => v.retail_price_minor)) : null;
+export function publicProductDto(product, { variantsByProduct, stock, storeCurrency }, { detail = false } = {}) {
+  const variants = (variantsByProduct.get(product.id) ?? []).sort(byCreated);
+  const priced = variants.filter(v => v.retailPriceMinor !== null && storeCurrency && v.currency === storeCurrency);
+  const fromPrice = priced.length ? Math.min(...priced.map(v => v.retailPriceMinor)) : null;
   const available = priced.reduce((sum, v) => sum + Math.max(0, stock.get(v.sku)?.available ?? 0), 0);
   const summary = {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    tagline: row.tagline,
-    category: { id: row.category_id, slug: row.category_slug, label: row.category_label },
-    brand: row.brand,
-    images: json(row.images),
-    illustration: row.illustration,
-    illustrative: Boolean(row.illustrative),
-    price: fromPrice === null ? null : { fromAmountMinor: fromPrice, currency: storeCurrency, varies: new Set(priced.map(v => v.retail_price_minor)).size > 1 },
+    id: product.id,
+    slug: product.slug,
+    title: product.title,
+    tagline: product.tagline,
+    category: { id: product.category.id, slug: product.category.slug, label: product.category.label },
+    brand: product.brand,
+    images: product.images,
+    illustration: product.illustration,
+    illustrative: product.illustrative,
+    price: fromPrice === null ? null : { fromAmountMinor: fromPrice, currency: storeCurrency, varies: new Set(priced.map(v => v.retailPriceMinor)).size > 1 },
     availability: priced.length === 0 ? 'unconfirmed' : available > 0 ? 'in_stock' : 'out_of_stock',
-    hirePurchaseEnabled: Boolean(row.hire_purchase_enabled),
+    hirePurchaseEnabled: product.hirePurchaseEnabled,
   };
   if (!detail) return summary;
   return {
     ...summary,
-    description: row.description,
-    specifications: json(row.specifications),
+    description: product.description,
+    specifications: product.specifications,
     variants: priced.map(v => ({
       sku: v.sku,
-      attributes: json(v.attributes),
-      price: { amountMinor: v.retail_price_minor, currency: v.currency },
+      attributes: v.attributes,
+      price: { amountMinor: v.retailPriceMinor, currency: v.currency },
       availability: (stock.get(v.sku)?.available ?? 0) > 0 ? 'in_stock' : 'out_of_stock',
     })),
     purchaseModes: {
       retail: RETAIL_UNAVAILABLE,
-      hirePurchase: { eligible: Boolean(row.hire_purchase_enabled), available: false, reason: 'applications_not_configured' },
+      hirePurchase: { eligible: product.hirePurchaseEnabled, available: false, reason: 'applications_not_configured' },
     },
     // Owner-approved delivery, returns and warranty policies are not supplied yet.
     policies: [],
@@ -105,11 +153,11 @@ export function publicProductDto(db, row, { detail = false } = {}) {
 }
 
 /** Fields a product needs before it can be published, as field errors. */
-export function publishReadiness(db, row) {
+export async function publishReadiness(db, product, tx) {
   const errors = {};
-  if (!row.description.trim()) errors.description = 'Add a description before publishing.';
-  if (json(row.images).length === 0 && !row.illustration) errors.images = 'Add at least one image or illustration before publishing.';
-  const category = db.prepare('SELECT published FROM categories WHERE id = ?').get(row.category_id);
-  if (!category?.published) errors.categoryId = 'The category must be published first.';
+  if (!product.description.trim()) errors.description = 'Add a description before publishing.';
+  if (product.images.length === 0 && !product.illustration) errors.images = 'Add at least one image or illustration before publishing.';
+  const category = await read(db.collection(C.categories).doc(product.categoryId), tx);
+  if (!category.exists || !category.data().published) errors.categoryId = 'The category must be published first.';
   return errors;
 }

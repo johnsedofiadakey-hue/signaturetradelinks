@@ -1,21 +1,25 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { openDatabase } from '../src/db.js';
+import { openFirestore } from '../src/firestore.js';
 import { bootstrapOwner } from '../src/routes/admin-staff.js';
 
 export const ORIGIN = 'http://127.0.0.1:5173';
 export const OWNER = { email: 'owner@example.test', displayName: 'Test Owner', password: 'owner-password-123' };
 
-/** Start an API server on an ephemeral port backed by a fresh in-memory database. */
+if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Run tests with `npm test` so they use the Firestore emulator.');
+
+/** Start an API server on an ephemeral port backed by its own emulator project, so every suite starts empty. */
 export async function startTestServer() {
-  const db = openDatabase(':memory:');
-  const config = { ...loadConfig({}), dbPath: ':memory:', logRequests: false };
-  const server = createServer(createApp({ db, config, log: { error() {}, info() {} } }));
+  const projectId = `demo-stl-${randomUUID().slice(0, 8)}`;
+  const db = openFirestore(projectId);
+  const config = { ...loadConfig({}), projectId, logRequests: false };
+  const server = createServer(createApp({ db, config, log: { error: console.error, info() {} } }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}/api/v1`;
   await bootstrapOwner(db, OWNER);
-  return { db, base, close: () => new Promise(resolve => server.close(() => { db.close(); resolve(); })) };
+  return { db, projectId, base, close: () => new Promise(resolve => server.close(resolve)) };
 }
 
 /** Minimal browser-like client: keeps the session cookie and sends the CSRF token on writes. */

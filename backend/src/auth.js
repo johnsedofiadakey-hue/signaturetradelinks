@@ -1,14 +1,17 @@
-import { scrypt, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
+import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { permissionsFor } from '../../shared/contract.js';
 import { fail, parseCookies, serializeCookie } from './http.js';
-import { now } from './db.js';
+import { C, now, sha256, transaction } from './firestore.js';
+
+export { sha256 };
 
 const scryptAsync = promisify(scrypt);
 const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const KEY_LENGTH = 64;
 
-export const SESSION_COOKIE = 'stl_admin_session';
+// Firebase Hosting forwards only a cookie named __session to the API, so the session must use that name.
+export const SESSION_COOKIE = '__session';
 export const MIN_PASSWORD_LENGTH = 12;
 
 export async function hashPassword(password) {
@@ -35,7 +38,6 @@ export async function burnPasswordCheck(password) {
 }
 
 export const randomToken = () => randomBytes(32).toString('base64url');
-export const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 export function safeEqual(a, b) {
   const left = Buffer.from(String(a));
@@ -43,14 +45,19 @@ export function safeEqual(a, b) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-export function createSession(db, staffId, ttlMs) {
+export async function createSession(db, staffId, ttlMs) {
   const token = randomToken();
   const csrfToken = randomToken();
-  const createdAt = now();
-  db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(createdAt);
-  db.prepare('INSERT INTO sessions (token_hash, staff_id, csrf_token, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-    .run(sha256(token), staffId, csrfToken, createdAt, new Date(Date.now() + ttlMs).toISOString());
+  await db.collection(C.sessions).doc(sha256(token)).create({
+    staffId, csrfToken, createdAt: now(), expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+  });
   return { token, csrfToken };
+}
+
+/** Delete every session for a staff member, inside a transaction. Call after the transaction's other reads. */
+export async function revokeSessions(db, tx, staffId) {
+  const sessions = await tx.get(db.collection(C.sessions).where('staffId', '==', staffId));
+  return () => sessions.docs.forEach(doc => tx.delete(doc.ref));
 }
 
 export function sessionCookie(token, config) {
@@ -63,25 +70,20 @@ export function clearSessionCookie(config) {
   return serializeCookie(SESSION_COOKIE, '', { path: '/api/v1/admin', secure: config.secureCookies, maxAgeSeconds: 0 });
 }
 
-export function rolesFor(db, staffId) {
-  return db.prepare('SELECT role FROM staff_roles WHERE staff_id = ? ORDER BY role').all(staffId).map(row => row.role);
-}
+export const publicStaff = (id, data) => ({
+  id, email: data.email, displayName: data.displayName, roles: [...data.roles].sort(), permissions: permissionsFor(data.roles),
+});
 
 /** Resolve the signed-in staff member from the session cookie, or null. */
-export function loadSession(db, req) {
+export async function loadSession(db, req) {
   const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
   if (!token) return null;
-  const row = db.prepare(`
-    SELECT s.token_hash, s.csrf_token, s.expires_at, st.id, st.email, st.display_name, st.status
-    FROM sessions s JOIN staff st ON st.id = s.staff_id
-    WHERE s.token_hash = ?`).get(sha256(token));
-  if (!row || row.expires_at <= now() || row.status !== 'active') return null;
-  const roles = rolesFor(db, row.id);
-  return {
-    tokenHash: row.token_hash,
-    csrfToken: row.csrf_token,
-    staff: { id: row.id, email: row.email, displayName: row.display_name, roles, permissions: permissionsFor(roles) },
-  };
+  const sessionRef = db.collection(C.sessions).doc(sha256(token));
+  const session = await sessionRef.get();
+  if (!session.exists || session.data().expiresAt <= now()) return null;
+  const staff = await db.collection(C.staff).doc(session.data().staffId).get();
+  if (!staff.exists || staff.data().status !== 'active') return null;
+  return { ref: sessionRef, csrfToken: session.data().csrfToken, staff: publicStaff(staff.id, staff.data()) };
 }
 
 const LOOPBACK_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d{1,5}$/;
@@ -95,8 +97,8 @@ export function checkOrigin(req, config) {
 }
 
 /** Require an active staff session, an optional permission, and CSRF protection on writes. */
-export function requireStaff(ctx, permission) {
-  const session = loadSession(ctx.db, ctx.req);
+export async function requireStaff(ctx, permission) {
+  const session = await loadSession(ctx.db, ctx.req);
   if (!session) fail('unauthenticated', 'Please sign in to continue.');
   if (ctx.req.method !== 'GET' && ctx.req.method !== 'HEAD') {
     checkOrigin(ctx.req, ctx.config);
@@ -108,31 +110,38 @@ export function requireStaff(ctx, permission) {
   return session.staff;
 }
 
-/** Fixed-window limiter. In-memory, so per-process; move to a shared store before running multiple instances. */
+/** Fixed-window limiter stored in Firestore, so it holds across every server instance. */
 export class RateLimiter {
-  constructor({ limit, windowMs }) {
+  constructor(db, { name, limit, windowMs }) {
+    this.db = db;
+    this.name = name;
     this.limit = limit;
     this.windowMs = windowMs;
-    this.hits = new Map();
   }
 
-  check(key) {
-    const entry = this.hits.get(key);
-    if (!entry || entry.resetAt <= Date.now()) return;
-    if (entry.count >= this.limit) {
-      const retryAfter = Math.ceil((entry.resetAt - Date.now()) / 1000);
-      fail('rate_limited', 'Too many attempts. Please wait and try again.', { headers: { 'Retry-After': String(retryAfter) } });
-    }
+  ref(key) {
+    return this.db.collection(C.rateLimits).doc(sha256(`${this.name}\n${key}`));
+  }
+
+  async check(key) {
+    const snap = await this.ref(key).get();
+    const entry = snap.data();
+    if (!entry || entry.resetAt <= Date.now() || entry.count < this.limit) return;
+    fail('rate_limited', 'Too many attempts. Please wait and try again.', {
+      headers: { 'Retry-After': String(Math.ceil((entry.resetAt - Date.now()) / 1000)) },
+    });
   }
 
   record(key) {
-    const entry = this.hits.get(key);
-    if (!entry || entry.resetAt <= Date.now()) this.hits.set(key, { count: 1, resetAt: Date.now() + this.windowMs });
-    else entry.count += 1;
-    if (this.hits.size > 10_000) for (const [k, v] of this.hits) if (v.resetAt <= Date.now()) this.hits.delete(k);
+    const ref = this.ref(key);
+    return transaction(this.db, async tx => {
+      const entry = (await tx.get(ref)).data();
+      if (!entry || entry.resetAt <= Date.now()) tx.set(ref, { count: 1, resetAt: Date.now() + this.windowMs });
+      else tx.update(ref, { count: entry.count + 1 });
+    });
   }
 
   reset(key) {
-    this.hits.delete(key);
+    return this.ref(key).delete();
   }
 }

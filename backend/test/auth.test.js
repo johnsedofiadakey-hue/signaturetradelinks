@@ -149,8 +149,9 @@ describe('roles and staff management', () => {
   });
 
   test('audit events never contain password hashes or invitation tokens', async () => {
-    const rows = server.db.prepare('SELECT before_state, after_state, metadata FROM audit_events').all();
-    const text = JSON.stringify(rows);
+    const events = await server.db.collection('auditEvents').get();
+    assert.ok(events.size > 5);
+    const text = JSON.stringify(events.docs.map(doc => [doc.data().before, doc.data().after, doc.data().metadata]));
     assert.doesNotMatch(text, /scrypt\$/);
     assert.doesNotMatch(text, /password/i);
     assert.doesNotMatch(text, /inviteToken|invite_token/);

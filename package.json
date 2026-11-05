@@ -6,11 +6,13 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "api": "node --disable-warning=ExperimentalWarning backend/src/server.js",
-    "api:watch": "node --disable-warning=ExperimentalWarning --watch backend/src/server.js",
-    "admin:bootstrap": "node --disable-warning=ExperimentalWarning backend/scripts/bootstrap-owner.js",
-    "seed:fixtures": "node --disable-warning=ExperimentalWarning backend/scripts/seed-fixtures.js",
-    "test": "node --disable-warning=ExperimentalWarning --test \"backend/test/*.test.js\"",
+    "emulators": "sh backend/scripts/with-java21.sh firebase emulators:start --only firestore --project demo-signature $([ -f backend/.emulator-data/firebase-export-metadata.json ] && echo --import backend/.emulator-data) --export-on-exit backend/.emulator-data",
+    "api": "node backend/src/server.js",
+    "api:watch": "node --watch backend/src/server.js",
+    "admin:bootstrap": "node backend/scripts/bootstrap-owner.js",
+    "seed:fixtures": "node backend/scripts/seed-fixtures.js",
+    "test": "sh backend/scripts/with-java21.sh firebase emulators:exec --only firestore --project demo-signature-test \"node --test 'backend/test/*.test.js'\"",
+    "deploy": "npm run build && firebase deploy --only firestore,functions,hosting",
     "deploy:hosting": "npm run build && firebase deploy --only hosting"
   },
   "keywords": [],
@@ -18,6 +20,8 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0",
     "lucide-react": "^1.69.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
@@ -26,6 +30,7 @@
     "vite": "^8.3.6"
   },
   "engines": {
-    "node": ">=24"
-  }
+    "node": ">=22"
+  },
+  "main": "backend/src/function.js"
 }

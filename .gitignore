@@ -3,6 +3,7 @@ dist/
 .env*
 !.env.example
 .DS_Store
-backend/data/
 .firebase/
 firebase-debug.log
+backend/.emulator-data/
+firestore-debug.log

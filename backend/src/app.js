@@ -15,13 +15,13 @@ function compile(path) {
   return { regex: new RegExp(`^${pattern}$`), keys };
 }
 
-/** Build the API request handler. Everything stateful is injected so tests can run against an in-memory database. */
+/** Build the API request handler. Everything stateful is injected so tests can run against isolated emulator projects. */
 export function createApp({ db, config, log = console }) {
   const routes = [];
   const route = (method, path, handler, options = {}) => routes.push({ method, path, handler, options, ...compile(path) });
 
   registerPublic(route);
-  registerAdminAuth(route);
+  registerAdminAuth(route, db);
   registerAdminCatalogue(route);
   registerAdminInventory(route);
   registerAdminStaff(route);

@@ -1,25 +1,27 @@
-import { newId, now } from './db.js';
+import { C, newId, now, sortKey } from './firestore.js';
 
 /**
- * Append an audit event. Callers pass already-sanitised state: never secrets, password hashes,
- * tokens or assessment document contents.
+ * Append an audit event, inside the caller's transaction when given so it commits atomically with the change.
+ * Callers pass already-sanitised state: never secrets, password hashes, tokens or assessment document contents.
  */
-export function recordAudit(db, { actor, action, resourceType, resourceId = null, before = null, after = null, metadata = null, requestId = null }) {
-  db.prepare(`
-    INSERT INTO audit_events (id, actor_type, actor_id, action, resource_type, resource_id, before_state, after_state, metadata, request_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    newId('aud'),
-    actor ? 'staff' : 'system',
-    actor?.id ?? null,
+export function recordAudit(db, tx, { actor, action, resourceType, resourceId = null, before = null, after = null, metadata = null, requestId = null }) {
+  const id = newId('aud');
+  const createdAt = now();
+  const ref = db.collection(C.auditEvents).doc(id);
+  const event = {
+    actorType: actor ? 'staff' : 'system',
+    actorId: actor?.id ?? null,
     action,
     resourceType,
     resourceId,
-    before && JSON.stringify(before),
-    after && JSON.stringify(after),
-    metadata && JSON.stringify(metadata),
+    before,
+    after,
+    metadata,
     requestId,
-    now(),
-  );
+    createdAt,
+    sortKey: sortKey(createdAt, id),
+  };
+  return tx ? tx.create(ref, event) : ref.create(event);
 }
 
 export const auditFrom = (ctx, staff) => ({ actor: staff, requestId: ctx.requestId });

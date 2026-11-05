@@ -1,15 +1,16 @@
 # Backend & admin — milestone 1–2 handoff
 
-Prepared 5 November 2026 by Claude in response to `CLAUDE_BACKEND_BLUEPRINT.md`. Local only: no infrastructure was provisioned, nothing was deployed, and no messages were sent.
+Prepared 5 November 2026 by Claude in response to `CLAUDE_BACKEND_BLUEPRINT.md`. Updated the same day for the move to Firestore and Cloud Functions on the owner's Firebase project `signaturetradelinks`. No messages were sent.
 
 ## What exists now
 
 | Area | Location | Notes |
 | --- | --- | --- |
 | Contract | `shared/openapi.yaml`, `shared/contract.js` | OpenAPI 3.1 for implemented endpoints plus every blueprint endpoint not built yet. Roles, permissions, state machines and error codes shared by backend and admin. |
-| API server | `backend/src/` | Node 24, zero runtime dependencies: `node:http` + built-in `node:sqlite`. Base `/api/v1`. |
+| API server | `backend/src/` | Node 22+, `node:http` handler on Firestore via `firebase-admin`. Runs as the Cloud Function `api` (`backend/src/function.js`, europe-west1) behind Firebase Hosting's `/api/**` rewrite, or locally with `npm run api`. Base `/api/v1`. |
+| Firebase config | `firebase.json`, `firestore.rules`, `firestore.indexes.json` | Firestore in europe-west1. Rules deny all client access; only the API reads and writes. |
 | Admin portal | `admin/` → served at `/admin/` | React + Vite (second entry in `vite.config.js`). Sign-in, invite acceptance, overview, catalogue, SKUs/prices, inventory ledger, staff/roles, settings, audit log. |
-| Tests | `backend/test/` | 38 tests run with `npm test`. |
+| Tests | `backend/test/` | 39 tests run with `npm test` against the Firestore emulator. Each suite gets its own emulator project. |
 | Tooling | `backend/scripts/` | Owner bootstrap, test-only fixture seeding. |
 
 The customer storefront now reads the public API through `src/services/catalogue.js` (milestone 6, catalogue part):
@@ -23,39 +24,57 @@ The customer storefront now reads the public API through `src/services/catalogue
 
 ## Run locally
 
+Needs Java 21+ for the Firestore emulator. The npm scripts find a Homebrew JDK 21 automatically.
+
 ```sh
 npm install
-npm run seed:fixtures                       # test-only illustrative products, unpriced
+npm run emulators                           # terminal 1: Firestore emulator on 127.0.0.1:8085, project demo-signature
+npm run seed:fixtures                       # illustrative products, unpriced
 npm run admin:bootstrap -- --email you@example.com --name "Your Name"   # prints a generated password once
-npm run api                                 # http://127.0.0.1:8787/api/v1
-npm run dev                                 # storefront /, admin /admin/ (Vite proxies /api)
-npm test
+npm run api                                 # terminal 2: http://127.0.0.1:8787/api/v1
+npm run dev                                 # terminal 3: storefront /, admin /admin/ (Vite proxies /api)
+npm test                                    # starts its own emulator
 ```
 
-Data lives in `backend/data/dev.sqlite`, which git ignores. Set `STL_DB_PATH` to use another file. To reset, stop the API and delete `backend/data/`.
+Local data is saved to `backend/.emulator-data/` (git-ignored) when the emulator stops. Local scripts default to the `demo-signature` emulator project and cannot touch live data unless you pass `--project signaturetradelinks`. Seeding a live project also needs `--confirm-live`.
 
-## Stack decision (ADR-001)
+## Deploy
 
-**Decision:** for milestones 1–2, use a self-contained Node + SQLite service instead of Firebase. The blueprint allows an alternative stack that is documented and honours the contract.
+```sh
+npm run deploy                              # build, then firebase deploy: Firestore rules/indexes, the api function, hosting
+npm run admin:bootstrap -- --project signaturetradelinks --email you@example.com --name "Your Name"   # once, first owner on live
+```
 
-**Why:** the owner has not confirmed hosting, region, budget or accounts. This stack runs with no accounts and needs no emulators. It also gives real ACID transactions (`BEGIN IMMEDIATE`) for the inventory and version checks the blueprint requires. Immutable ledgers and audit logs are enforced by database triggers as well as in code.
+## Stack decision (ADR-001, revised)
 
-**Consequences / migration path:** persistence is plain SQL behind the route handlers. The HTTP contract, not the storage, is the stable interface. Moving to Firebase (Cloud Run + Firestore) or to Postgres means reimplementing the queries in `backend/src/` while keeping `shared/openapi.yaml` and the tests. Postgres is the easier fit for the ledger-heavy milestones 3–5. Two current limits:
-- Login rate limiting is in-memory, so it is per process.
-- SQLite supports a single writer node.
+**First version:** a self-contained Node + SQLite service, chosen while hosting was unconfirmed.
 
-Both are fine for one instance. Revisit them before scaling out.
+**Now:** the owner chose Firestore. The same `node:http` handler runs as a 2nd-gen Cloud Function (Cloud Run underneath) in europe-west1, behind the existing Hosting site. Storefront, admin and API therefore share one origin, and the admin cookie stays first-party. The HTTP contract and the tests did not change, apart from one SQLite-trigger test replaced by Firestore rules and ledger-consistency tests.
+
+**How the guarantees map to Firestore:**
+- **Transactions:** every multi-document write runs in a Firestore transaction, which retries on contention. Version checks, stock checks and uniqueness happen inside the transaction.
+- **Uniqueness:** enforced by index documents keyed by the unique value: `productSlugs`, `categorySlugs`, `skus` (SKU), and `staffEmails` (SHA-256 of the lowercased email).
+- **Stock:** each SKU doc carries `onHand`/`reserved` counters, updated in the same transaction as the immutable `inventoryMovements` entry. A test checks that the counter equals the ledger sum.
+- **Append-only collections:** the ledger and audit log are only ever created, never updated or deleted. The Admin SDK bypasses rules, so this is enforced in code, and clients are denied all access by `firestore.rules`.
+- **Rate limits:** stored in Firestore (`rateLimits`), so they hold across instances. The per-account limit is keyed by email alone, because forwarded IPs can be spoofed.
+- **Cookie name:** the session cookie is named `__session`, the only cookie Firebase Hosting forwards to functions.
+- **Indexes:** queries avoid composite indexes except the five in `firestore.indexes.json`. Catalogue, inventory and dashboard reads load whole collections and filter in memory. That's fine for a few hundred products; move to denormalised summaries beyond that.
+
+**Housekeeping not yet set up:**
+- TTL policies to purge expired `sessions`, `idempotencyKeys` and `rateLimits` docs.
+- Scheduled Firestore backups.
+- An Artifact Registry cleanup policy (`firebase functions:artifacts:setpolicy`).
 
 ## Security properties (tested)
 
-- **Sessions:** staff sessions use an `HttpOnly; SameSite=Strict` cookie scoped to `/api/v1/admin`. The DB stores only a SHA-256 of the token, and sessions expire after 8 hours. The cookie is `Secure` when `NODE_ENV=production`.
-- **CSRF:** every admin write needs a per-session `X-CSRF-Token` and a JSON body. Foreign `Origin` headers are rejected. Outside production, any localhost port is allowed so Vite can pick a free port. Set the real origins in `STL_ALLOWED_ORIGINS` for production.
-- **Passwords:** hashed with scrypt (N=32768). Unknown emails and wrong passwords get the same response and comparable timing. Each account is limited to 5 failures per 15 minutes, and each IP to 30.
+- **Sessions:** staff sessions use an `HttpOnly; SameSite=Strict` cookie named `__session`, scoped to `/api/v1/admin`. Firestore stores only a SHA-256 of the token, and sessions expire after 8 hours. The cookie is `Secure` in the live environment.
+- **CSRF:** every admin write needs a per-session `X-CSRF-Token` and a JSON body. Foreign `Origin` headers are rejected. Live origins default to `signaturetradelinks.web.app` and `.firebaseapp.com`; add a custom domain via `STL_ALLOWED_ORIGINS`. Locally, any localhost port is allowed so Vite can pick a free port.
+- **Passwords:** hashed with scrypt (N=32768). Unknown emails and wrong passwords get the same response and comparable timing. Each account is limited to 5 failures per 15 minutes, and each IP to 30, with counters stored in Firestore.
 - **Accounts:** there is no self-registration. The first owner is created by a server-side CLI that refuses to run once any owner exists. Other staff join by owner invitation: a one-time code, stored hashed, valid for 72 hours, which the owner shares out of band.
 - **Permissions:** deny by default, enforced on the server on every request (see `ROLE_PERMISSIONS`). Staff cannot change their own roles. There must always be an active owner. Role changes and deactivation end the target's sessions immediately.
 - **Concurrency:** every versioned write uses an optimistic `expectedVersion` check, and a mismatch returns 409.
 - **Stock:** adjustments need an `Idempotency-Key` and are append-only ledger rows. Stock can never drop below zero or below reserved quantities; concurrent last-unit removals are tested.
-- **Audit:** the audit log is append-only (enforced by a trigger) and never stores password hashes or invitation codes.
+- **Audit:** the audit log is append-only and never stores password hashes or invitation codes. Clients can't read or write it directly (tested against the rules).
 - **Money:** stored as integer minor units. A price can only be set after the owner confirms `store.currency`, and must be in that currency. The admin converts typed amounts to minor units with string arithmetic, not floats.
 - **Unbuilt endpoints:** checkout, orders, hire-purchase, offers, agreements, uploads and webhooks return `503 not_configured`, never a success-looking response.
 
@@ -68,24 +87,30 @@ Both are fine for one instance. Revisit them before scaling out.
 
 ## Verification performed (5 Nov 2026)
 
-- `npm test`: 38/38 passing. The suite covers:
+- `npm test`: 39/39 passing on the Firestore emulator (originally 38/38 on SQLite). The suite covers:
   - auth, rate limiting, CSRF/origin and content-type checks
   - role escalation, last-owner protection and session revocation
   - publish state machine, readiness and slug lock
   - stale-version conflicts and validation (unknown fields, unsafe image URLs, float prices)
   - currency gating and public price exposure
   - idempotent stock receipt and key reuse
-  - the stock floor, concurrent last-unit removal and immutable ledger/audit rows
+  - the stock floor, concurrent last-unit removal, stock counters matching the ledger, and Firestore rules denying direct client access
   - 503 for unbuilt services, 404/405 handling
 - `npm run build`: storefront and admin both build. The existing lucide-react `use client` warnings are unchanged.
-- Browser check in the built-in Chromium against a scratch database, at desktop width and 375px mobile:
+- Browser check in the built-in Chromium against a scratch database, at desktop width and 375px mobile (done on the SQLite version; the API contract is unchanged):
   - owner sign-in, the overview, setting the currency
   - adding a SKU at GHS 4,999.50 (stored as 499950)
   - recording +8 stock, then confirming `GET /products/smart-television` returned the price and `in_stock`
   - no horizontal page overflow on mobile
   - two UI defects (a SKU input pattern and the mobile grid width) were found and fixed during this check
 
-Not verified: real-device testing, a full accessibility audit, load testing, backup/restore, and any deployment.
+Not verified: real-device testing, a full accessibility audit, load testing and backup/restore.
+
+## Deployment state (5 Nov 2026)
+
+- **Done:** the Firestore database exists in europe-west1, and its rules and indexes are deployed.
+- **Blocked:** the first deploy of the `api` function failed at the build step. The project's build service account (`173781217052-compute@developer.gserviceaccount.com`) lacks `roles/cloudbuild.builds.builder`, which is common on new Google Cloud projects. The owner must grant it.
+- **Not yet changed:** Firebase did not release the new hosting config, so the live site still runs the earlier storefront-only release.
 
 ## Next milestones and what blocks them
 
@@ -95,4 +120,4 @@ Not verified: real-device testing, a full accessibility audit, load testing, bac
 | 4 Hire-purchase applications | Approved assessment fields, consent/privacy notice text and version, whether document uploads are allowed, retention rules |
 | 5 Agreements & finance | Deposit, fees, tenors, schedule and rounding rules, late-payment and early-settlement policy, jurisdiction review |
 | 6 Storefront integration | Catalogue reads done. Account, order and application screens follow milestones 3–5. Codex owns the storefront design, so coordinate any visual changes |
-| 7 Release | Hosting account/region/budget, production origins, backup plan, owner launch authorization |
+| 7 Release | Custom domain, backups and TTL policies, real-device and accessibility checks, owner launch authorization |

@@ -1,0 +1,10 @@
+rules_version = '2';
+// All data is read and written only by the API (Admin SDK, which bypasses these rules).
+// Browsers and mobile clients get no direct access to anything.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

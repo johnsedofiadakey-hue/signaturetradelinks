@@ -11,22 +11,23 @@ npm run dev
 
 Build with `npm run build`; serve the build with `npm run preview`.
 
-Backend API and admin portal (milestones 1–2, local only):
+Backend API and admin portal (Firestore + Cloud Functions; local development uses the Firestore emulator, which needs Java 21+):
 
 ```sh
-npm run seed:fixtures                       # test-only illustrative catalogue
-npm run admin:bootstrap -- --email you@example.com --name "Your Name"
-npm run api                                 # API on 127.0.0.1:8787, proxied at /api by Vite
-npm test                                    # backend test suite
+npm run emulators                           # terminal 1
+npm run seed:fixtures && npm run admin:bootstrap -- --email you@example.com --name "Your Name"
+npm run api                                 # terminal 2: API on 127.0.0.1:8787, proxied at /api by Vite
+npm test                                    # backend tests on the emulator
+npm run deploy                              # Firestore rules/indexes, api function, hosting
 ```
 
-Admin portal: `/admin/` on the Vite dev server. Details, security notes and verification are in `planning/BACKEND_HANDOFF.md`; the API contract is `shared/openapi.yaml`.
+Admin portal: `/admin/` on the Vite dev server, or `https://signaturetradelinks.web.app/admin/` once the API function is deployed. Details, security notes and verification are in `planning/BACKEND_HANDOFF.md`; the API contract is `shared/openapi.yaml`.
 
 ## Available now
 
 Responsive homepage reading the backend catalogue API (with a labelled offline fallback to bundled fixtures), category browsing, case-insensitive search, purchase-mode filtering, product details, in-memory retail bag with quantities/removal, hire-purchase process walkthrough, FAQs and a support information dialog. Product cards distinguish pay outright from assessed hire purchase.
 
-All products and photography are illustrative. Prices are unconfirmed. AC and washer visuals are CSS illustrations. Checkout, payments, account management and application submission are not connected. No personal assessment information is collected. Refreshing clears the preview bag. No infrastructure or public deployment has been created.
+All products and photography are illustrative. Prices are unconfirmed. AC and washer visuals are CSS illustrations. Checkout, payments, account management and application submission are not connected. No personal assessment information is collected. Refreshing clears the preview bag. Preview deployed to Firebase Hosting at https://signaturetradelinks.web.app (noindex); see `planning/BACKEND_HANDOFF.md` for deployment state.
 
 ## Work split
 

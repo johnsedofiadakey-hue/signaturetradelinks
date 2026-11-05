@@ -18,10 +18,17 @@ export async function readJson(req) {
   if (req.method === 'GET' || req.method === 'HEAD') return undefined;
   const chunks = [];
   let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
+  if (Buffer.isBuffer(req.rawBody)) {
+    // Cloud Functions has already consumed the stream and exposes the bytes as rawBody.
+    size = req.rawBody.length;
     if (size > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
-    chunks.push(chunk);
+    chunks.push(req.rawBody);
+  } else {
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
+      chunks.push(chunk);
+    }
   }
   if (size === 0) return {};
   const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
