@@ -14,8 +14,9 @@ const serviceAccount = 'stl-api@signaturetradelinks.iam.gserviceaccount.com';
 export const api = onRequest({
   region: 'europe-west1',
   serviceAccount,
-  // Set with `firebase functions:secrets:set PAYSTACK_SECRET_KEY`. Must exist before this function can deploy.
-  secrets: ['PAYSTACK_SECRET_KEY'],
+  // No Paystack key yet, so checkout stays closed. To turn payments on: run
+  // `firebase functions:secrets:set PAYSTACK_SECRET_KEY`, uncomment the next line, then redeploy functions.
+  // secrets: ['PAYSTACK_SECRET_KEY'],
   memory: '512MiB', concurrency: 40, maxInstances: 5, timeoutSeconds: 30, invoker: 'public',
 }, handler);
 

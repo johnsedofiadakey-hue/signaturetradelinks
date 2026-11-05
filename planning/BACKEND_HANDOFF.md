@@ -40,11 +40,11 @@ Built and tested locally on 5 November 2026. **Not live until the steps below ar
 
 ### To turn it on
 
-1. Set the key. `backend/src/function.js` declares this secret, so the function cannot deploy until it exists. Use the Paystack test key first:
+1. Set the key, using the Paystack test key first:
    ```sh
    firebase functions:secrets:set PAYSTACK_SECRET_KEY --project signaturetradelinks
    ```
-2. Deploy functions, Firestore indexes and hosting.
+2. In `backend/src/function.js`, uncomment the `secrets` line, then deploy functions. The backend is deployed without it for now, so checkout reports `payment_provider` as missing and stays closed.
 3. In the Paystack dashboard, set the webhook URL to `https://signaturetradelinks.web.app/api/v1/webhooks/paystack`.
 4. In admin, under Settings, enter the currency (GHS), delivery areas and fees, pickup address and hours, hold time, and returns wording.
 5. Price and stock at least one product, place a test order, then switch to the live key.
