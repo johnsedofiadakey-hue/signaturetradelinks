@@ -1,6 +1,10 @@
 # Retail and hire purchase: two stores, one catalogue
 
-Status: design proposal, revised 5 Nov 2026. Nothing below is built yet.
+Status, 5 Nov 2026:
+- **Built:** step 1 of "Suggested order":
+  - The two stores, with real paths: `/`, `/p/:slug`, `/checkout`, `/hire-purchase`, `/hire-purchase/p/:slug`, `/hire-purchase/apply`.
+  - The admin "Where it is sold" section.
+- **Not built yet:** checkout and the hire-purchase application. Their pages show what each will ask for, say plainly that they are not open yet, and collect nothing.
 
 ## The idea
 
@@ -26,7 +30,7 @@ One catalogue keeps a single source of truth for products, specifications, image
 The retail store reads as a normal, complete shop. Hire purchase is not mentioned on cards, in the bag or at checkout.
 
 1. **Browse:** home, categories, search, product grid. The "Hire purchase available" filter and the twin buttons on cards are removed.
-2. **Product page:** its own route (`/p/:slug`) instead of a dialog, so it can be shared and indexed later. Shows the price, availability, variant picker, quantity and **Add to bag**. If the product is eligible, one quiet line at the bottom says "Also available on hire purchase" and links to `/hire-purchase`.
+2. **Product page:** its own route (`/p/:slug`) instead of a dialog (built), so it can be shared and indexed later. Shows the price, availability, variant picker, quantity and **Add to bag**. If the product is eligible, one quiet line at the bottom says "Also available on hire purchase" and links to `/hire-purchase`.
 3. **Bag:** retail items only. The server recalculates every price.
 4. **Checkout** (`/checkout`), one page with clear steps:
    1. Contact: name, phone, email. Guest checkout; no account required.

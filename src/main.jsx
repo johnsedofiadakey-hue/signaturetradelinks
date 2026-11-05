@@ -1,45 +1,68 @@
-import React,{useState,useEffect,useRef} from 'react';
-import {createRoot} from 'react-dom/client';
-import {ArrowUpRight,ArrowRight,ShoppingBag,Search,Menu,X,Headphones,Tv,Wind,WashingMachine,Smartphone,Grid2X2,Minus,Plus,Check,ClipboardCheck,Wallet,ChevronDown,SlidersHorizontal,ArrowLeft} from 'lucide-react';
-import {loadCatalogue,loadProductDetail,formatPrice} from './services/catalogue';
+// Two stores over one catalogue: the retail shop at / and the hire-purchase store at /hire-purchase.
+// See planning/RETAIL_HP_SEPARATION.md for the design.
+import React, { useCallback, useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './clean.css';
-import HeroCarousel from './components/HeroCarousel';
-import BrandLogo from './components/BrandLogo';
-const categoryIcons={audio:Headphones,'tv-and-entertainment':Tv,cooling:Wind,'home-appliances':WashingMachine,'phones-and-computing':Smartphone};
-const ALL={slug:'all',label:'All products'};
-function Appliance({type}){return <div className={`appliance ${type}`} aria-label={`Illustration of ${type==='ac'?'an air conditioner':'a washing machine'}`} role="img">{type==='ac'?<><div className="ac-light"/><div className="ac-vent"/><span>···</span></>:<><div className="washer-controls"><i/><b/><span>···</span></div><div className="washer-door"><div/></div></>}</div>}
-function ProductImage({product,eager=false,priority=false}){return product.image?<img src={product.image} alt={product.imageAlt??product.name} loading={eager?'eager':'lazy'} fetchPriority={priority?'high':'auto'}/>:<Appliance type={product.illustration}/>}
-function App(){
- const [catalogue,setCatalogue]=useState({status:'loading',source:null,categories:[],products:[]}),[detail,setDetail]=useState(null),[category,setCategory]=useState('all'),[query,setQuery]=useState(''),[searchOpen,setSearchOpen]=useState(false),[menu,setMenu]=useState(false),[filter,setFilter]=useState('all'),[modal,setModal]=useState(null),[selected,setSelected]=useState(null),[mode,setMode]=useState('retail'),[cart,setCart]=useState([]),[step,setStep]=useState(1),[notice,setNotice]=useState('');
- const opener=useRef(null),dialog=useRef(null);
- const filtered=catalogue.products.filter(p=>(category==='all'||p.categorySlug===category)&&(`${p.name} ${p.category} ${p.brand??''}`.toLowerCase().includes(query.toLowerCase()))&&(filter!=='hire'||p.hirePurchase));
- const categories=[ALL,...catalogue.categories],categoryLabel=categories.find(c=>c.slug===category)?.label??ALL.label;
- useEffect(()=>{const ctrl=new AbortController();loadCatalogue(ctrl.signal).then(data=>setCatalogue({status:'ready',...data}),()=>{});return()=>ctrl.abort()},[]);
- useEffect(()=>{if(!('IntersectionObserver' in window))return;const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.dataset.visible='true';observer.unobserve(entry.target)}}),{threshold:.08});document.querySelectorAll('[data-reveal]').forEach(el=>observer.observe(el));document.documentElement.classList.add('motion-ready');return()=>observer.disconnect()},[catalogue.status,category,query,filter]);
- const count=cart.reduce((s,i)=>s+i.quantity,0);
- function close(){setModal(null);setStep(1);setTimeout(()=>opener.current?.focus(),0)}
- function open(type,p=null,purchase='retail'){opener.current=document.activeElement;setSelected(p);setMode(purchase);setStep(1);setModal(type);if(type==='product'&&p&&catalogue.source==='api'&&detail?.slug!==p.slug){setDetail({slug:p.slug,status:'loading'});loadProductDetail(p.slug).then(d=>setDetail(cur=>cur?.slug===p.slug?{slug:p.slug,status:'ready',...d}:cur),()=>setDetail(cur=>cur?.slug===p.slug?{slug:p.slug,status:'error'}:cur))}}
- useEffect(()=>{if(!modal)return;const old=document.body.style.overflow;document.body.style.overflow='hidden';dialog.current?.focus();function key(e){if(e.key==='Escape')close();if(e.key==='Tab'){const items=[...dialog.current.querySelectorAll('button,input,select,a,[tabindex="0"]')].filter(x=>!x.disabled);if(!items.length)return;const first=items[0],last=items.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===dialog.current)){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}}document.addEventListener('keydown',key);return()=>{document.body.style.overflow=old;document.removeEventListener('keydown',key)}},[modal]);
- useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),3500);return()=>clearTimeout(t)},[notice]);
- function browse(cat='all'){setCategory(categories.some(c=>c.slug===cat)?cat:'all');setMenu(false);document.getElementById('shop').scrollIntoView({behavior:'smooth'})}
- function add(p){setCart(c=>{const item=c.find(i=>i.id===p.id);return item?c.map(i=>i.id===p.id?{...i,quantity:i.quantity+1}:i):[...c,{...p,quantity:1}]});setNotice('Added to your preview bag');close()}
- function quantity(id,delta){setCart(c=>c.map(i=>i.id===id?{...i,quantity:i.quantity+delta}:i).filter(i=>i.quantity>0))}
- return <><div className="preview-strip">DESIGN PREVIEW <span>{catalogue.products.some(p=>p.illustrative)&&'Illustrative products & imagery · '}{catalogue.products.some(p=>!p.price)&&'Some prices to be confirmed · '}No live orders</span></div><header className="header"><BrandLogo/><nav className={menu?'nav expanded':'nav'} aria-label="Main navigation"><button onClick={()=>browse()}>Shop all <ChevronDown size={12}/></button><button onClick={()=>browse('home-appliances')}>Home appliances</button><a href="#how-it-works" onClick={()=>setMenu(false)}>Hire purchase <span className="nav-dot"/></a><button onClick={()=>{setMenu(false);open('help')}}>Help & support</button></nav><div className="header-actions"><button className="icon-button" aria-label="Search products" onClick={()=>{setSearchOpen(!searchOpen);setTimeout(()=>document.getElementById('search')?.focus(),0)}}><Search size={21}/></button><button className="bag-button" aria-label={`Open shopping bag, ${count} items`} onClick={()=>open('cart')}><ShoppingBag size={20}/><span>{count}</span></button><button className="icon-button mobile-menu" aria-label="Toggle menu" aria-expanded={menu} onClick={()=>setMenu(!menu)}>{menu?<X/>:<Menu/>}</button></div></header>
- {searchOpen&&<div className="search-bar"><Search size={20}/><input id="search" aria-label="Search catalogue" value={query} onChange={e=>{setQuery(e.target.value);document.getElementById('shop').scrollIntoView({behavior:'smooth'})}} placeholder="Search headphones, televisions, appliances…"/><button onClick={()=>{setQuery('');setSearchOpen(false)}} aria-label="Close search"><X size={20}/></button></div>}
- <main><HeroCarousel onBrowse={browse}/>
- <section className="purchase-bar" aria-label="Ways to purchase"><div><Wallet size={25}/><p><strong>Pay outright</strong><span>One payment. Your next upgrade.</span></p></div><div><ClipboardCheck size={26}/><p><strong>Or apply for hire purchase</strong><span>Your application. Our team's assessment.</span></p></div><a href="#how-it-works">Find your way to pay <ArrowUpRight size={19}/></a></section>
- <section className="shop section" id="shop"><div className="section-top" data-reveal><div><p className="eyebrow">THE EVERYDAY, UPGRADED</p><h2>What’s your next upgrade?</h2></div><span className="muted small">A little something for every part of life.</span></div><div className="category-grid" data-reveal>{categories.map(({slug,label})=>{const Icon=categoryIcons[slug]??Grid2X2;return <button key={slug} onClick={()=>setCategory(slug)} className={category===slug?'category active':'category'} aria-pressed={category===slug}><Icon size={26} strokeWidth={1.4}/><span>{label}</span></button>})}</div><div className="product-toolbar"><p><strong>{category==='all'?'Explore the collection':categoryLabel}</strong><span>{catalogue.status==='loading'?'Loading the collection…':`${filtered.length} ${filtered.length===1?'product':'products'}`}</span></p><label><SlidersHorizontal size={15}/><select aria-label="Filter by purchase option" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All purchase options</option><option value="hire">Hire purchase available</option></select></label></div>{catalogue.source==='fixtures'&&<p className="offline-note" role="status">Offline preview: the catalogue service isn’t reachable, so these are the bundled illustrative products.</p>}<div className="product-grid">{filtered.map(p=><article className="product-card" data-reveal key={p.id}><button className="product-image" onClick={()=>open('product',p)} aria-label={`View ${p.name}`}><span className="product-tag">{p.tag}</span><ProductImage product={p}/><span className="product-open"><ArrowUpRight size={18}/></span>{(p.illustrative||p.illustration)&&<span className="media-label">{p.illustration?'Illustration':'Illustrative photo'}</span>}</button><div className="product-meta"><span>{p.category}</span><h3><button onClick={()=>open('product',p)}>{p.name}</button></h3><p className="price">{formatPrice(p.price)}{p.availability==='out_of_stock'&&<span className="stock-note">Out of stock</span>}</p><div className="product-options"><button onClick={()=>open('product',p,'retail')}>Buy outright <ArrowUpRight size={14}/></button>{p.hirePurchase?<button className="hp-option" onClick={()=>open('product',p,'hire')}>Apply for hire purchase <ArrowUpRight size={14}/></button>:<span className="retail-only">Outright purchase</span>}</div>{p.hirePurchase&&<p className="assessment-label">Subject to assessment & approval</p>}</div></article>)}</div>{catalogue.status==='ready'&&filtered.length===0&&<div className="empty"><Search/><h3>No products found</h3><p>Try another search or category.</p><button className="button dark" onClick={()=>{setCategory('all');setQuery('');setFilter('all')}}>Reset filters</button></div>}</section>
- <section data-reveal className="hire-section" id="how-it-works"><div className="hire-intro"><p className="eyebrow">YOUR UPGRADE. YOUR WAY.</p><h2>Want it now.<br/><span>Pay over time.</span></h2><p>Explore hire purchase on eligible products.<br/>You choose an upgrade. Our team reviews your application and discusses the available terms with you.</p><button className="button orange" onClick={()=>{setFilter('hire');browse()}}>Explore eligible products <ArrowUpRight size={19}/></button><small>Subject to assessment and approval. Terms are confirmed individually before you commit.</small></div><div className="steps">{[['01','Find your upgrade','Choose a product marked for hire purchase.'],['02','Apply for assessment','Share the details our team needs to review your application.'],['03','Review your offer','If approved, review the deposit, payment schedule and full terms before accepting.']].map(([n,title,desc])=><div className="step" key={n}><span>{n}</span><div><h3>{title}</h3><p>{desc}</p></div><ArrowUpRight size={20}/></div>)}<div className="assessment-note"><ClipboardCheck size={19}/><p>Real people. A considered decision.<br/><span>Every application is assessed by our team.</span></p></div></div></section>
- <section className="faq-section section" data-reveal><div><p className="eyebrow">A FEW THINGS TO KNOW</p><h2>Good questions.<br/>Clear answers.</h2></div><div className="faq-list">{[['Can I buy without hire purchase?','Yes. Outright purchase and hire purchase are separate choices. The live store will display the confirmed retail price for each product.'],['Is hire purchase automatically approved?','No. Our team assesses every application. Submitting an application does not mean you have been approved or placed an order.'],['What will my deposit and repayments be?','Your deposit, repayment schedule, total payable and applicable terms will be presented in an individual offer after assessment. No repayment amounts are confirmed in this preview.'],['Can I place an order on this website now?','This is a design preview. Catalogue details, prices, delivery arrangements and the backend must be confirmed before live orders or applications can be accepted.']].map(([q,a])=><details key={q}><summary>{q}<Plus size={17}/></summary><p>{a}</p></details>)}</div></section>
- </main><footer><div className="footer-top"><BrandLogo/><p>Good tech.<br/>More possibilities.</p><button onClick={()=>open('help')}>Let’s talk upgrades <ArrowUpRight size={20}/></button></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Signature Tradelink.</span><span>Local design preview · Catalogue & policies awaiting confirmation</span></div></footer>
- {notice&&<div className="toast" role="status"><Check size={18}/>{notice}</div>}
- {modal&&<div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)close()}}><section className={`modal ${modal==='cart'?'cart-modal':''}`} role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabIndex={-1} ref={dialog}><button className="modal-close icon-button" onClick={close} aria-label="Close dialog"><X/></button>
- {modal==='product'&&selected&&<><div className="detail-image"><ProductImage product={selected}/></div><p className="eyebrow">{selected.category}{selected.illustrative&&' · ILLUSTRATIVE PRODUCT'}</p><h2 id="dialog-title">{selected.name}</h2>{catalogue.source==='api'?(detail?.slug===selected.slug&&detail.status==='ready'?<><p>{detail.description}</p>{detail.specifications.length>0&&<dl className="spec-list">{detail.specifications.map(s=><div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}</dl>}</>:<p className="muted">{detail?.status==='error'?'Product details are unavailable right now. Please try again shortly.':'Loading product details…'}</p>):<p>{selected.description}</p>}<div className="mode-tabs"><button className={mode==='retail'?'selected':''} onClick={()=>setMode('retail')}>Pay outright</button>{selected.hirePurchase&&<button className={mode==='hire'?'selected':''} onClick={()=>setMode('hire')}>Hire purchase</button>}</div>{mode==='retail'?<><h3>{formatPrice(selected.price)}</h3>{selected.availability==='out_of_stock'?<p className="muted">Currently out of stock. Check back soon.</p>:<p className="muted">Save this item to your preview bag. Checkout will be available when the catalogue and backend are ready.</p>}<button className="button dark full" disabled={selected.availability==='out_of_stock'} onClick={()=>add(selected)}>Add to preview bag <ShoppingBag size={18}/></button></>:<><h3>Apply first. Decide after assessment.</h3><p className="muted">Our team will review your application. Any offer will state the deposit, payment schedule and total payable before you accept.</p><button className="button orange full" onClick={()=>{setModal('application');setStep(1)}}>Preview the application process <ArrowRight size={18}/></button></>}</>}
- {modal==='cart'&&<><p className="eyebrow">YOUR NEXT UPGRADES</p><h2 id="dialog-title">Your bag <span className="muted">({count})</span></h2>{cart.length?<><div className="cart-items">{cart.map(i=><div className="cart-item" key={i.id}><div className="cart-image"><ProductImage product={i}/></div><div><h3>{i.name}</h3><p>{formatPrice(i.price)}</p><div className="quantity"><button onClick={()=>quantity(i.id,-1)} aria-label={`Remove one ${i.name}`}><Minus size={14}/></button><span>{i.quantity}</span><button onClick={()=>quantity(i.id,1)} aria-label={`Add one ${i.name}`}><Plus size={14}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(p=>p.id!==i.id))}>Remove</button></div></div></div>)}</div><div className="checkout-note"><strong>Checkout is not open yet</strong><p>This preview does not take payments or place orders. Final prices and delivery costs will be shown in the live checkout.</p></div><button className="button dark full" onClick={close}>Continue exploring <ArrowRight size={18}/></button></>:<div className="empty"><ShoppingBag size={35}/><h3>A little room for an upgrade.</h3><p>Your preview bag is empty.</p><button className="button dark" onClick={()=>{close();browse()}}>Explore the collection <ArrowRight size={18}/></button></div>}</>}
- {modal==='application'&&<><p className="eyebrow">HIRE PURCHASE · PROCESS PREVIEW</p><h2 id="dialog-title">{step===1?'Your path to an upgrade.':'Ready for a human review.'}</h2><p className="application-product">{selected?.name}</p>{step===1?<><div className="checkout-note"><strong>No personal information is collected here.</strong><p>This walkthrough shows the planned process. A live application will be sent securely to your assessment team after the backend is connected.</p></div><ol className="application-list"><li><strong>Contact details</strong><span>A verified way for the team to reach you.</span></li><li><strong>Assessment information</strong><span>Only the information required by the agreed assessment policy.</span></li><li><strong>Review and consent</strong><span>Check your application and the privacy notice before submitting.</span></li></ol><button className="button orange full" onClick={()=>setStep(2)}>See what happens next <ArrowRight size={18}/></button></>:<><div className="assessment-icon"><ClipboardCheck size={32}/></div><p>In the live store, a submitted application will receive a reference and a status of <strong>Submitted</strong>. Your team can request information, review the application and prepare an offer.</p><p>Customers review and accept the full offer before any deposit or fulfilment step.</p><div className="checkout-note"><strong>Walkthrough complete — nothing submitted.</strong><p>No application, assessment or order has been created.</p></div><button className="button dark full" onClick={close}>Back to the collection <ArrowRight size={18}/></button><button className="text-button" onClick={()=>setStep(1)}><ArrowLeft size={14}/> Back to process</button></>}</>}
- {modal==='help'&&<><p className="eyebrow">HERE TO HELP</p><h2 id="dialog-title">Let’s make it clear.</h2><p>This storefront is being prepared for Signature Tradelink. The business contact number, location, opening hours and support channels have not been supplied yet.</p><div className="checkout-note"><strong>Have a question about hire purchase?</strong><p>All applications will be assessed by the business team. Rates, deposits, eligibility and repayment terms must be confirmed before the store opens.</p></div><button className="button dark" onClick={()=>{close();document.getElementById('how-it-works').scrollIntoView({behavior:'smooth'})}}>How hire purchase works <ArrowRight size={18}/></button></>}
- </section></div>}
- </>;
+import './stores.css';
+import { Footer, HelpDialog, HirePurchaseHeader, PreviewStrip, RetailHeader, Toast } from './components/shared';
+import Apply from './hire-purchase/Apply';
+import HirePurchaseHome from './hire-purchase/HirePurchaseHome';
+import HirePurchaseProduct from './hire-purchase/HirePurchaseProduct';
+import BagDialog from './retail/BagDialog';
+import Checkout from './retail/Checkout';
+import ProductPage, { NotFound } from './retail/ProductPage';
+import RetailHome from './retail/RetailHome';
+import { match, navigate, useLocation } from './router';
+import { StoreProvider, useCatalogue } from './state';
+
+function useTitle(title) {
+  useEffect(() => { document.title = title ? `${title} — Signature Tradelink` : 'Signature Tradelink — Upgrade your everyday'; }, [title]);
 }
-createRoot(document.getElementById('root')).render(<App/>);
+
+function App() {
+  const { path, search } = useLocation();
+  const { products } = useCatalogue();
+  const [help, setHelp] = useState(false);
+  const [bagOpen, setBagOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const openHelp = useCallback(() => setHelp(true), []);
+  const closeHelp = useCallback(() => setHelp(false), []);
+  const closeBag = useCallback(() => setBagOpen(false), []);
+
+  const hirePurchase = path === '/hire-purchase' || path.startsWith('/hire-purchase/');
+  const productSlug = match('/p/:slug', path)?.slug;
+  const hpSlug = match('/hire-purchase/p/:slug', path)?.slug;
+  const nameOf = slug => products.find(p => p.slug === slug)?.name;
+
+  let page;
+  let title;
+  if (path === '/' || path === '') { page = <RetailHome search={search} query={query} onResetQuery={() => setQuery('')} />; }
+  else if (productSlug) { page = <ProductPage slug={productSlug} />; title = nameOf(productSlug); }
+  else if (match('/checkout', path)) { page = <Checkout />; title = 'Checkout'; }
+  else if (match('/hire-purchase', path)) { page = <HirePurchaseHome />; title = 'Hire purchase'; }
+  else if (hpSlug) { page = <HirePurchaseProduct slug={hpSlug} />; title = `${nameOf(hpSlug) ?? 'Product'} · Hire purchase`; }
+  else if (match('/hire-purchase/apply', path)) { page = <Apply search={search} />; title = 'Apply for hire purchase'; }
+  else { page = <NotFound />; title = 'Not found'; }
+  useTitle(title);
+
+  // Searching always searches the shop, so leave other pages for the product list.
+  const onQuery = value => {
+    setQuery(value);
+    if (path !== '/') navigate('/#shop');
+  };
+
+  return (
+    <div className={hirePurchase ? 'store-hp' : 'store-retail'}>
+      <PreviewStrip />
+      {hirePurchase ? <HirePurchaseHeader onHelp={openHelp} /> : <RetailHeader onHelp={openHelp} onBag={() => setBagOpen(true)} query={query} onQuery={onQuery} />}
+      {page}
+      <Footer onHelp={openHelp} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : 'Design preview · Catalogue & policies awaiting confirmation'} />
+      <Toast />
+      {help && <HelpDialog onClose={closeHelp} />}
+      {bagOpen && <BagDialog onClose={closeBag} />}
+    </div>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<StoreProvider><App /></StoreProvider>);
