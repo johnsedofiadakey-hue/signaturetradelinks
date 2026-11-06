@@ -365,5 +365,7 @@
 .hp-card-body p { margin: 0; font-size: 13px; color: var(--muted); }
 .hp-card-action { display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 12px; font-size: 13px; font-weight: 600; color: var(--green); }
 .hp-card-action:hover { text-decoration: underline; }
+.footer-admin { color: inherit; text-decoration: none; opacity: .6; }
+.footer-admin:hover, .footer-admin:focus-visible { opacity: 1; text-decoration: underline; }
 .pdp-add { margin: 10px 0 12px; }
 .pdp-actions .button { white-space: nowrap; }
