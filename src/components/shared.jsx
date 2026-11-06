@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, Heart, Menu, Search, ShoppingCart, X } from 'lucide-react';
 import BrandLogo from './BrandLogo';
+import { WHATSAPP_NUMBER, businessEnquiry } from '../discovery/contact';
 import { productMedia } from '../productMedia';
 import { PaymentBadges } from './PaymentMethods';
 import { Link, navigate, useLocation } from '../router';
@@ -78,7 +79,8 @@ export function HelpDialog({ onClose }) {
     <Modal onClose={onClose}>
       <p className="eyebrow">HERE TO HELP</p>
       <h2 id="dialog-title">Let’s make it clear.</h2>
-      <p>This storefront is being prepared for Signature Tradelink. The business contact number, location, opening hours and support channels have not been supplied yet.</p>
+      <p>Questions about a product, delivery or hire purchase? Contact Signature Tradelink on WhatsApp. Store location and opening hours are awaiting confirmation.</p>
+      <a className="button outline support-whatsapp" href={businessEnquiry("Hello Signature Tradelink, I need some help.")} target="_blank" rel="noopener noreferrer">WhatsApp {WHATSAPP_NUMBER} <ArrowUpRight size={17}/></a>
       <div className="checkout-note">
         <strong>Two ways to buy</strong>
         <p>The shop sells outright to anyone. Hire purchase is a separate store for customers our team has assessed and approved.</p>

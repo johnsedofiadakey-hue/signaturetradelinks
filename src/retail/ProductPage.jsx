@@ -1,6 +1,7 @@
 // Retail product page: price, stock, variant and quantity, then the cart. Hire purchase is one quiet link at the end.
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { PaymentChoices } from '../components/ShoppingConfidence';
 import { SecureLine } from '../components/PaymentMethods';
 import { ProductImage, WishButton } from '../components/shared';
 import { Link } from '../router';
@@ -73,9 +74,9 @@ export default function ProductPage({ slug }) {
           <p className="eyebrow">{product.category}{product.illustrative && ' · ILLUSTRATIVE PRODUCT'}</p>
           <h1 className="page-title">{product.name}</h1>
           {product.tag && <p className="muted">{product.tag}</p>}
-          <p className="pdp-price">{formatPrice(price)}</p>
+          <PaymentChoices product={product} price={price}/>
           <p className={`pdp-stock ${outOfStock ? 'out' : product.availability === 'in_stock' || variant ? '' : 'unconfirmed'}`}>
-            {outOfStock ? 'Out of stock. Check back soon.' : product.availability === 'in_stock' ? 'In stock' : 'Availability to be confirmed'}
+            {outOfStock ? 'Out of stock. Check back soon.' : (variant?.availability ?? product.availability) === 'in_stock' ? 'In stock' : 'Availability to be confirmed'}
           </p>
 
           {variants.length > 1 && (
