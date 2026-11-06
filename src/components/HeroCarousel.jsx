@@ -1,16 +1,19 @@
+// The first thing a visitor sees: what we sell, in one changing word, and the two ways to pay for it.
 import {useEffect,useRef,useState} from 'react';
-import {ArrowLeft,ArrowRight,ArrowUpRight,Pause,Play} from 'lucide-react';
+import {ArrowUpRight,Pause,Play} from 'lucide-react';
+import {Link} from '../router';
 
-const duration=6500;
+const duration=3200;
 const features=[
- {id:'oled',category:'tv-and-entertainment',title:'LG OLED TV',image:'/hero/lg-oled-hero-v1.webp',alt:'AI-retouched LG OLED television with magenta and blue screen artwork'},
- {id:'washer',category:'home-appliances',title:'Washing machines',image:'/hero/lg-washer-hero-v1.webp',alt:'AI-retouched graphite LG front-loading washing machine'},
- {id:'audio',category:'audio',title:'Home audio',image:'/hero/lg-audio-hero-v1.webp',alt:'AI-retouched LG subwoofer, soundbar and rear speakers'},
- {id:'fridge',category:'home-appliances',title:'Fridges',image:'/hero/lg-fridge-hero-v1.webp',alt:'AI-retouched graphite LG InstaView refrigerator'},
- {id:'headphones',category:'audio',title:'Headphones',image:'/hero/headphones-hero-v1.webp',alt:'AI-retouched black over-ear headphones'},
+ {id:'tv',word:'TV',category:'tv-and-entertainment',image:'/hero/lg-oled-hero-v1.webp',alt:'AI-retouched LG OLED television with magenta and blue screen artwork'},
+ {id:'fridge',word:'fridge',category:'home-appliances',image:'/hero/lg-fridge-hero-v1.webp',alt:'AI-retouched graphite LG InstaView refrigerator'},
+ {id:'washer',word:'washer',category:'home-appliances',image:'/hero/lg-washer-hero-v1.webp',alt:'AI-retouched graphite LG front-loading washing machine'},
+ {id:'ac',word:'AC',category:'cooling',image:'/hero/ac-studio-v1.webp',alt:'AI-retouched white wall-mounted air conditioner'},
+ {id:'audio',word:'sound system',category:'audio',image:'/hero/lg-audio-hero-v1.webp',alt:'AI-retouched LG subwoofer, soundbar and rear speakers'},
+ {id:'phone',word:'phone',category:'phones-and-computing',image:'/hero/phone-studio-v1.webp',alt:'AI-retouched smartphone with a blue and teal screen'},
 ];
 
-export default function HeroCarousel({onBrowse}){
+export default function HeroCarousel(){
  const [active,setActive]=useState(0),[paused,setPaused]=useState(false),[hovered,setHovered]=useState(false),[focused,setFocused]=useState(false),[reduced,setReduced]=useState(()=>typeof matchMedia!=='undefined'&&matchMedia('(prefers-reduced-motion: reduce)').matches),[hidden,setHidden]=useState(document.hidden),[inView,setInView]=useState(true);
  const root=useRef(null),swipeStart=useRef(null);
  const stopped=paused||hovered||focused||reduced||hidden||!inView;
@@ -18,13 +21,21 @@ export default function HeroCarousel({onBrowse}){
  useEffect(()=>{if(stopped)return;const timer=setTimeout(()=>setActive(i=>(i+1)%features.length),duration);return()=>clearTimeout(timer)},[active,stopped]);
  function change(delta){setActive(i=>(i+delta+features.length)%features.length)}
  const slide=features[active];
- return <section ref={root} className={`feature-hero ${stopped?'motion-paused':''}`} data-feature={slide.id} aria-roledescription="carousel" aria-label="Featured product collections" onFocusCapture={()=>setFocused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setFocused(false)}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();change(1)}if(e.key==='ArrowLeft'){e.preventDefault();change(-1)}}}>
-  <div className="feature-copy"><span className="hero-brand-stroke" aria-hidden="true"/><h1 key={slide.id}>{slide.title}</h1><button className="button dark" onClick={()=>onBrowse(slide.category)}>Explore <ArrowUpRight size={18}/></button></div>
-  <div className="feature-showcase" onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onPointerDown={e=>{if(e.pointerType==='touch')swipeStart.current=e.clientX}} onPointerUp={e=>{if(swipeStart.current!==null){const delta=e.clientX-swipeStart.current;if(Math.abs(delta)>45)change(delta<0?1:-1);swipeStart.current=null}}} onPointerCancel={()=>{swipeStart.current=null}}>
-   <div className="feature-stage">
-   {features.map((s,i)=><div key={s.id} role="group" aria-roledescription="slide" aria-label={`${i+1} of ${features.length}: ${s.title}`} aria-hidden={i!==active} className={`showcase-slide slide-${s.id} ${i===active?'is-active':''}`}><div className="showcase-visual"><img src={s.image} alt={s.alt} loading={i===0?'eager':'lazy'} fetchPriority={i===0?'high':'auto'} decoding="async"/></div></div>)}
-   </div>
-   <div className="feature-controls"><span className="featured-name">AI-retouched showcase</span><div className="feature-navigation"><div className="slide-indicators" aria-label="Choose a featured product">{features.map((s,i)=><button key={s.id} className={i===active?'active':''} aria-label={`Show slide ${i+1}: ${s.title}`} aria-current={i===active?'true':undefined} onClick={()=>setActive(i)}><span key={`${active}-${stopped}`} style={{'--slide-duration':`${duration}ms`}}/></button>)}</div><div className="carousel-arrows"><button onClick={()=>change(-1)} aria-label="Previous product"><ArrowLeft size={15}/></button><button aria-label={paused?'Resume automatic slideshow':'Pause automatic slideshow'} aria-pressed={paused} onClick={()=>setPaused(v=>!v)}>{paused?<Play size={12}/>:<Pause size={12}/>}</button><button onClick={()=>change(1)} aria-label="Next product"><ArrowRight size={15}/></button></div></div></div>
+ return <section ref={root} className="sell-hero" data-feature={slide.id} aria-label="Welcome" onFocusCapture={()=>setFocused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setFocused(false)}} onKeyDown={e=>{if(e.key==='ArrowRight')change(1);if(e.key==='ArrowLeft')change(-1)}}>
+  <h1 className="sell-hero-title">
+   <span className="sell-hero-sr">Your next TV, fridge, washer, AC, sound system or phone.</span>
+   <span aria-hidden="true">Your next<span className="sell-hero-word" key={slide.id}>{slide.word}.</span></span>
+  </h1>
+  <div className="sell-hero-media" onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onPointerDown={e=>{if(e.pointerType==='touch')swipeStart.current=e.clientX}} onPointerUp={e=>{if(swipeStart.current!==null){const delta=e.clientX-swipeStart.current;if(Math.abs(delta)>45)change(delta<0?1:-1);swipeStart.current=null}}} onPointerCancel={()=>{swipeStart.current=null}}>
+   <Link className="sell-hero-stage" to={`/shop/${slide.category}`} aria-label={`Shop for your next ${slide.word}`}>
+    {features.map((s,i)=><img key={s.id} className={i===active?'is-active':''} src={s.image} alt={i===active?s.alt:''} fetchPriority={i===0?'high':'low'} decoding={i===0?'sync':'async'}/>)}
+   </Link>
+   <div className="sell-hero-foot"><span>AI-retouched image</span><button type="button" aria-label={paused?'Resume changing products':'Pause changing products'} aria-pressed={paused} onClick={()=>setPaused(v=>!v)}>{paused?<Play size={12}/>:<Pause size={12}/>}</button></div>
+  </div>
+  <div className="sell-hero-offer">
+   <p>Pay in full, or monthly.</p>
+   <div className="sell-hero-actions"><Link className="button dark" to="/shop">Shop now <ArrowUpRight size={18}/></Link><Link className="button outline" to="/hire-purchase">Pay monthly</Link></div>
+   <small>Monthly payments subject to approval.</small>
   </div>
  </section>
 }

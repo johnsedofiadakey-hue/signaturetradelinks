@@ -71,7 +71,7 @@ export default function RetailHome() {
 
   return (
     <main className="retail-landing">
-      <HeroCarousel onBrowse={slug => navigate(`/shop/${slug}`)} />
+      <HeroCarousel />
       <section className="shop section">
         <div className="section-top" data-reveal>
           <div><p className="eyebrow">THE EVERYDAY, UPGRADED</p><h2>What’s your next upgrade?</h2></div>
