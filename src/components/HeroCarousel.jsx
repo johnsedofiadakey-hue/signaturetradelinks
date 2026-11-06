@@ -14,11 +14,11 @@ const features=[
 ];
 
 export default function HeroCarousel(){
- const [active,setActive]=useState(0),[paused,setPaused]=useState(false),[hovered,setHovered]=useState(false),[focused,setFocused]=useState(false),[reduced,setReduced]=useState(()=>typeof matchMedia!=='undefined'&&matchMedia('(prefers-reduced-motion: reduce)').matches),[hidden,setHidden]=useState(document.hidden),[inView,setInView]=useState(true);
+ const [active,setActive]=useState(0),[paused,setPaused]=useState(false),[focused,setFocused]=useState(false),[reduced,setReduced]=useState(()=>typeof matchMedia!=='undefined'&&matchMedia('(prefers-reduced-motion: reduce)').matches),[inView,setInView]=useState(true);
  const root=useRef(null),swipeStart=useRef(null);
- const stopped=paused||hovered||focused||reduced||hidden||!inView;
- useEffect(()=>{const media=matchMedia('(prefers-reduced-motion: reduce)');const update=()=>setReduced(media.matches);media.addEventListener('change',update);const visibility=()=>setHidden(document.hidden);document.addEventListener('visibilitychange',visibility);const observer=new IntersectionObserver(([entry])=>setInView(entry.isIntersecting),{threshold:.15});observer.observe(root.current);return()=>{media.removeEventListener('change',update);document.removeEventListener('visibilitychange',visibility);observer.disconnect()}},[]);
- useEffect(()=>{if(stopped)return;const timer=setTimeout(()=>setActive(i=>(i+1)%features.length),duration);return()=>clearTimeout(timer)},[active,stopped]);
+ const stopped=paused||focused||reduced||!inView;
+ useEffect(()=>{const media=matchMedia('(prefers-reduced-motion: reduce)');const update=()=>setReduced(media.matches);media.addEventListener('change',update);const observer=new IntersectionObserver(([entry])=>setInView(entry.isIntersecting),{threshold:.15});observer.observe(root.current);return()=>{media.removeEventListener('change',update);observer.disconnect()}},[]);
+ useEffect(()=>{if(stopped)return;const timer=setInterval(()=>{if(!document.hidden)setActive(i=>(i+1)%features.length)},duration);return()=>clearInterval(timer)},[active,stopped]);
  function change(delta){setActive(i=>(i+delta+features.length)%features.length)}
  const slide=features[active];
  return <section ref={root} className="sell-hero" data-feature={slide.id} aria-label="Welcome" onFocusCapture={()=>setFocused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setFocused(false)}} onKeyDown={e=>{if(e.key==='ArrowRight')change(1);if(e.key==='ArrowLeft')change(-1)}}>
@@ -26,7 +26,7 @@ export default function HeroCarousel(){
    <span className="sell-hero-sr">Your next TV, fridge, washer, AC, sound system or phone.</span>
    <span aria-hidden="true">Your next<span className="sell-hero-word" key={slide.id}>{slide.word}.</span></span>
   </h1>
-  <div className="sell-hero-media" onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onPointerDown={e=>{if(e.pointerType==='touch')swipeStart.current=e.clientX}} onPointerUp={e=>{if(swipeStart.current!==null){const delta=e.clientX-swipeStart.current;if(Math.abs(delta)>45)change(delta<0?1:-1);swipeStart.current=null}}} onPointerCancel={()=>{swipeStart.current=null}}>
+  <div className="sell-hero-media" onPointerDown={e=>{if(e.pointerType==='touch')swipeStart.current=e.clientX}} onPointerUp={e=>{if(swipeStart.current!==null){const delta=e.clientX-swipeStart.current;if(Math.abs(delta)>45)change(delta<0?1:-1);swipeStart.current=null}}} onPointerCancel={()=>{swipeStart.current=null}}>
    <Link className="sell-hero-stage" to={`/shop/${slide.category}`} aria-label={`Shop for your next ${slide.word}`}>
     {features.map((s,i)=><img key={s.id} className={i===active?'is-active':''} src={s.image} alt={i===active?s.alt:''} fetchPriority={i===0?'high':'low'} decoding={i===0?'sync':'async'}/>)}
    </Link>
