@@ -440,20 +440,97 @@ paths:
       responses: { '200': { description: Received }, '401': { description: invalid_signature } }
   /me/orders: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
   /me/orders/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /hire-purchase/applications: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/applications: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/applications/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/applications/{id}/information: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/applications/{id}/withdraw: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/offers/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/offers/{id}/accept: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/agreements/{id}: { get: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /me/agreements/{id}/payments: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /uploads/assessment-intent: { post: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /hire-purchase/options:
+    get:
+      summary: Whether applications are open and, if so, the wording to agree to
+      description: Closed until the owner sets hirePurchase.privacyNotice, hirePurchase.declaration and store.currency.
+      responses: { '200': { description: "{ open } or { open, privacyNotice, privacyVersion, declaration, declarationVersion, currency }" } }
+  /me/hire-purchase/application:
+    get:
+      summary: The signed-in customer's own application, or null. Staff notes and reasons are never included
+      description: All /me/hire-purchase routes take a Firebase ID token as a Bearer header and need a confirmed email.
+      responses: { '200': { description: Application or null }, '401': { description: unauthenticated }, '403': { description: forbidden } }
+    patch:
+      summary: Save one section. Blanks are allowed; anything entered must be valid
+      responses: { '200': { description: Saved }, '409': { description: "stale_version, invalid_transition" }, '422': { description: "validation_failed, commercial_setting_missing" } }
+  /me/hire-purchase/application/submit:
+    post:
+      summary: Submit, recording the exact wording agreed to
+      responses: { '200': { description: Submitted }, '409': { description: "stale_version (including changed wording), invalid_transition" }, '422': { description: "validation_failed, keyed section.field" } }
+  /me/hire-purchase/application/withdraw:
+    post: { summary: Withdraw before a decision, responses: { '200': { description: Withdrawn }, '409': { description: invalid_transition } } }
+  /me/hire-purchase/application/reopen:
+    post: { summary: Restart a withdrawn application as a draft, responses: { '200': { description: Draft }, '409': { description: invalid_transition } } }
+  /me/hire-purchase/application/documents/{type}:
+    parameters: [{ name: type, in: path, required: true, schema: { type: string } }]
+    put:
+      summary: Upload or replace a document. The body is the file itself, up to 8 MB, checked by its content
+      responses: { '200': { description: Application }, '409': { description: invalid_transition }, '413': { description: payload_too_large }, '422': { description: validation_failed }, '503': { description: not_configured } }
+    get: { summary: The customer's own file, responses: { '200': { description: The file }, '404': { description: not_found } } }
+    delete: { summary: Remove a document while the application can be edited, responses: { '200': { description: Application } } }
+  /me/hire-purchase/buying:
+    get:
+      summary: Plans, wording and available amount. Refused without a current approval
+      responses: { '200': { description: "{ open, availableMinor, currency } and, when open, plans, terms and delivery options" }, '403': { description: not_approved } }
+  /me/hire-purchase/quote:
+    post: { summary: Every figure for one product on one plan, responses: { '200': { description: "{ figures, currency, withinLimit }" }, '403': { description: not_approved }, '503': { description: not_configured } } }
+  /me/hire-purchase/agreements:
+    get: { summary: The customer's own agreements, responses: { '200': { description: List } } }
+    post:
+      summary: Accept an agreement. Records the wording, holds the product, and starts only when the deposit is paid. Needs Idempotency-Key
+      responses: { '201': { description: Agreement }, '403': { description: not_approved }, '409': { description: "limit_exceeded, price_changed, stale_version, insufficient_stock" } }
+  /me/hire-purchase/agreements/{id}:
+    get: { summary: One of the customer's agreements, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Agreement }, '404': { description: not_found } } }
+  /me/hire-purchase/agreements/{id}/deposit:
+    post: { summary: Start paying the deposit on Paystack, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: "{ authorizationUrl }" }, '409': { description: "order_expired, invalid_transition" } } }
+  /me/hire-purchase/agreements/{id}/pay:
+    post: { summary: Start paying the next instalment on Paystack, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: "{ authorizationUrl }" }, '409': { description: invalid_transition } } }
+  /me/hire-purchase/agreements/{id}/verify:
+    post: { summary: Ask Paystack what happened and apply it, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Agreement } } }
+  /me/hire-purchase/account:
+    get:
+      summary: The approved account. Refused unless the approval is current
+      responses: { '200': { description: "{ active, limitMinor, currency, validUntil, conditions, approvedAt }" }, '403': { description: not_approved } }
   /webhooks/{provider}: { post: { tags: [not-configured], parameters: [{ name: provider, in: path, required: true, schema: { type: string } }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /admin/applications: { get: { tags: [not-configured], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /admin/applications/{id}/transitions: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
-  /admin/applications/{id}/offers: { post: { tags: [not-configured], parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '503': { $ref: '#/components/responses/NotConfigured' } } } }
+  /admin/applications:
+    get:
+      summary: Submitted applications, newest first. Drafts are never listed. Needs applications:read
+      parameters: [{ name: status, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Cursor' }]
+      responses: { '200': { description: Page of summaries } }
+  /admin/applications/{id}:
+    get:
+      summary: Full application. Each view is audited
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses: { '200': { description: Application }, '404': { description: not_found } }
+  /admin/applications/{id}/documents/{type}:
+    get:
+      summary: Open a submitted document. Each view is audited. Needs applications:read
+      parameters: [{ $ref: '#/components/parameters/Id' }, { name: type, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: The file }, '404': { description: not_found } }
+  /admin/agreements:
+    get: { summary: Agreements, newest first. Needs agreements:read, parameters: [{ name: status, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Cursor' }], responses: { '200': { description: Page } } }
+  /admin/agreements/{id}:
+    get: { summary: One agreement. Each view is audited, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Agreement } } }
+  /admin/agreements/{id}/payments:
+    post: { summary: Record the next instalment as paid outside Paystack. Needs agreements:payments, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Agreement } } }
+  /admin/agreements/{id}/cancel:
+    post: { summary: Record that an active agreement has ended. Needs applications:decide, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Agreement } } }
+  /admin/applications/{id}/start-review:
+    post: { summary: Pick up a submitted application. Needs applications:review, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Under review } } }
+  /admin/applications/{id}/request-information:
+    post: { summary: Send it back to the customer with a message. Needs applications:review, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Needs information } } }
+  /admin/applications/{id}/review:
+    put: { summary: Record checks and a recommendation. Needs applications:review, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Recommended } } }
+  /admin/applications/{id}/decide:
+    post:
+      summary: Approve with amount and validity, or decline. Needs applications:decide
+      description: Refused with separation_of_duties for whoever made the recommendation, and for anyone acting on their own application. Approval emails a sign-in link; a failed email is reported in notification and does not undo the approval.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses: { '200': { description: Decided }, '409': { description: "separation_of_duties, invalid_transition, stale_version" }, '422': { description: validation_failed } }
+  /admin/applications/{id}/send-sign-in-link:
+    post: { summary: Email an approved customer a new sign-in link. Needs applications:decide, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Sent or reported as not sent } } }
+  /admin/applications/{id}/reopen:
+    post: { summary: Return a decided application to review, ending any approval. Needs applications:decide, parameters: [{ $ref: '#/components/parameters/Id' }], responses: { '200': { description: Under review } } }
   /admin/orders:
     get:
       summary: List orders, newest first

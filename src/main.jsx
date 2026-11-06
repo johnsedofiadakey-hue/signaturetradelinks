@@ -1,6 +1,6 @@
 // Two stores over one catalogue: the retail shop at / and the hire-purchase store at /hire-purchase.
 // See planning/RETAIL_HP_SEPARATION.md for the design.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './clean.css';
@@ -9,7 +9,6 @@ import './landing.css';
 import './discovery/discovery.css';
 import {DiscoveryProvider} from './discovery/DiscoveryProvider';
 import { Footer, HelpDialog, HirePurchaseHeader, PreviewStrip, RetailHeader, Toast } from './components/shared';
-import Apply from './hire-purchase/Apply';
 import HirePurchaseHome from './hire-purchase/HirePurchaseHome';
 import HirePurchaseProduct from './hire-purchase/HirePurchaseProduct';
 import BagDialog from './retail/BagDialog';
@@ -21,6 +20,12 @@ import ShopPage from './retail/ShopPage';
 import WishlistPage from './retail/WishlistPage';
 import { match, navigate, useLocation } from './router';
 import { StoreProvider, useCatalogue } from './state';
+
+// Sign-in code is only downloaded by people who go to these two pages.
+const Apply = lazy(() => import('./hire-purchase/Apply'));
+const AccountPage = lazy(() => import('./hire-purchase/AccountPage'));
+const BuyPage = lazy(() => import('./hire-purchase/BuyPage'));
+const AgreementPage = lazy(() => import('./hire-purchase/AgreementPage'));
 
 function useTitle(title) {
   useEffect(() => { document.title = title ? `${title} — Signature Tradelink` : 'Signature Tradelink — Upgrade your everyday'; }, [title]);
@@ -63,6 +68,9 @@ function App() {
   else if (match('/hire-purchase', path)) { page = <HirePurchaseHome />; title = 'Hire purchase'; }
   else if (hpSlug) { page = <HirePurchaseProduct slug={hpSlug} />; title = `${nameOf(hpSlug) ?? 'Product'} · Hire purchase`; }
   else if (match('/hire-purchase/apply', path)) { page = <Apply search={search} />; title = 'Apply for hire purchase'; }
+  else if (match('/hire-purchase/account', path)) { page = <AccountPage />; title = 'Your account'; }
+  else if (match('/hire-purchase/buy/:slug', path)) { page = <BuyPage slug={match('/hire-purchase/buy/:slug', path).slug} />; title = 'Buy on hire purchase'; }
+  else if (match('/hire-purchase/agreements/:id', path)) { page = <AgreementPage id={match('/hire-purchase/agreements/:id', path).id} search={search} />; title = 'Your agreement'; }
   else { page = <NotFound />; title = 'Not found'; }
   useTitle(title);
 
@@ -76,7 +84,7 @@ function App() {
     <div className={hirePurchase ? 'store-hp' : 'store-retail'}>
       <PreviewStrip />
       {hirePurchase ? <HirePurchaseHeader onHelp={openHelp} /> : <RetailHeader onHelp={openHelp} onBag={() => setBagOpen(true)} query={query} onQuery={onQuery} />}
-      {page}
+      <Suspense fallback={<main className="section"><p className="muted">Loading…</p></main>}>{page}</Suspense>
       <Footer onHelp={openHelp} showPayment={!hirePurchase} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : checkoutOpen ? '' : 'Design preview · Catalogue & policies awaiting confirmation'} />
       <Toast />
       {help && <HelpDialog onClose={closeHelp} />}

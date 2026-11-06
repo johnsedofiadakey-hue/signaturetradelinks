@@ -1,6 +1,7 @@
 // Retail order rules: server-side pricing, stock holds, payment application and release of unpaid orders.
 // Prices always come from the database; the browser only ever sends SKUs and quantities.
 import { randomBytes } from 'node:crypto';
+import { activateAgreement, cancelAgreementForOrder } from './agreements.js';
 import { recordAudit } from './audit.js';
 import { stockLevels, stockOf } from './catalogue.js';
 import { C, newId, now, read, readAll, sha256, sortKey, transaction } from './firestore.js';
@@ -87,12 +88,13 @@ export const newAccessToken = () => randomBytes(24).toString('base64url');
 export const hashAccessToken = token => sha256(`order-access\n${token}`);
 
 /** Create the order and hold its stock. Caller runs this inside a transaction, after reads. */
-export function createOrder(db, tx, { priced, contact, address, reservationMinutes, stockBySku }) {
+export function createOrder(db, tx, { priced, contact, address, reservationMinutes, stockBySku, agreementId = null }) {
   const reference = newOrderReference();
   const accessToken = newAccessToken();
   const createdAt = now();
   const order = {
     reference,
+    agreementId,
     accessTokenHash: hashAccessToken(accessToken),
     items: priced.lines,
     currency: priced.currency,
@@ -140,7 +142,9 @@ export function expireIfDue(db, reference) {
     const order = snap.data();
     if (!order || order.paymentStatus !== 'pending_payment' || order.reservationExpiresAt > now()) return false;
     const release = await releaseHold(db, tx, order);
+    const closeAgreement = await cancelAgreementForOrder(db, tx, order, 'deposit_not_paid');
     release();
+    closeAgreement();
     tx.update(snap.ref, { paymentStatus: 'payment_expired', stockHeld: false, version: order.version + 1, updatedAt: now() });
     recordAudit(db, tx, { actor: null, action: 'order.payment_expired', resourceType: 'order', resourceId: reference, before: { paymentStatus: order.paymentStatus }, after: { paymentStatus: 'payment_expired' } });
     return true;
@@ -165,6 +169,7 @@ export function applyVerifiedPayment(db, { reference, amountMinor, currency, pro
     const order = snap.data();
     if (!order) return { applied: false, reason: 'unknown_order' };
     if (order.paymentStatus === 'paid') return { applied: false, reason: 'already_paid' };
+    const agreementSnap = order.agreementId ? await tx.get(db.collection(C.hpAgreements).doc(order.agreementId)) : null;
 
     const at = now();
     if (amountMinor !== order.totalMinor || currency !== order.currency) {
@@ -191,6 +196,7 @@ export function applyVerifiedPayment(db, { reference, amountMinor, currency, pro
       });
     }
     tx.set(db.collection(C.payments).doc(reference), { reference, provider: 'paystack', providerId, amountMinor, currency, paidAt: paidAt ?? at, source, recordedAt: at });
+    if (agreementSnap?.exists) activateAgreement(db, tx, agreementSnap, at);
     tx.update(orderRef, {
       paymentStatus: 'paid', paidAt: paidAt ?? at, stockHeld: false, stockDeducted: canDeduct,
       attention: canDeduct ? null : 'paid_without_stock', version: order.version + 1, updatedAt: at,
@@ -210,7 +216,9 @@ export function cancelUnpaidOrder(db, { reference, staff, requestId, expectedVer
     if (order.paymentStatus === 'paid') fail('refund_required', 'This order is paid. Refund it in Paystack before cancelling.');
     if (order.fulfilmentStatus === 'cancelled') fail('invalid_transition', 'This order is already cancelled.');
     const release = order.stockHeld ? await releaseHold(db, tx, order) : () => {};
+    const closeAgreement = await cancelAgreementForOrder(db, tx, order, 'order_cancelled');
     release();
+    closeAgreement();
     tx.update(snap.ref, { fulfilmentStatus: 'cancelled', stockHeld: false, version: order.version + 1, updatedAt: now() });
     recordAudit(db, tx, { actor: staff, requestId, action: 'order.cancelled', resourceType: 'order', resourceId: reference, before: { fulfilmentStatus: order.fulfilmentStatus }, after: { fulfilmentStatus: 'cancelled' }, metadata: { reason } });
   });

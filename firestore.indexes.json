@@ -6,7 +6,9 @@
     { "collectionGroup": "auditEvents", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "resourceType", "order": "ASCENDING" }, { "fieldPath": "resourceId", "order": "ASCENDING" }, { "fieldPath": "sortKey", "order": "DESCENDING" }] },
     { "collectionGroup": "inventoryMovements", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "sku", "order": "ASCENDING" }, { "fieldPath": "sortKey", "order": "DESCENDING" }] },
     { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "sortKey", "order": "DESCENDING" }] },
-    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "reservationExpiresAt", "order": "ASCENDING" }] }
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "reservationExpiresAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "hpAgreements", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "sortKey", "order": "DESCENDING" }] },
+    { "collectionGroup": "hpApplications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "sortKey", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

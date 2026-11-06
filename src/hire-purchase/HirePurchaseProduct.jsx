@@ -48,6 +48,7 @@ export default function HirePurchaseProduct({ slug }) {
             </div>
           </div>
           <Link className="button dark full" to={`/hire-purchase/apply?product=${encodeURIComponent(product.slug)}`}>Apply to get approved <ArrowUpRight size={18} /></Link>
+          <p className="muted small">Already approved? <Link className="inline-link" to={`/hire-purchase/buy/${product.slug}`}>Buy through your account</Link>.</p>
           <p className="muted small">Prefer to pay in full? <Link className="inline-link" to={`/p/${product.slug}`}>Buy it outright in the shop</Link>.</p>
         </div>
       </div>

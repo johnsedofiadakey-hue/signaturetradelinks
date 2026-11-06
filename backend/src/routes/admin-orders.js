@@ -10,6 +10,7 @@ import { publicOrderDto } from './checkout.js';
 
 const adminOrderDto = order => ({
   ...publicOrderDto(order),
+  agreementId: order.agreementId ?? null,
   stockHeld: order.stockHeld,
   stockDeducted: order.stockDeducted,
   attention: order.attention,

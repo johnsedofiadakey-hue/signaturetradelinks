@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   LayoutGrid, Package, Boxes, ShoppingCart, Users, Settings, ScrollText, LogOut, Plus, ArrowLeft, Search, Check, X, AlertTriangle,
-  Copy, Trash2, RefreshCw, ShieldCheck, ExternalLink,
+  Copy, Trash2, RefreshCw, ShieldCheck, ExternalLink, ClipboardCheck, FileText,
 } from 'lucide-react';
+import { ASSESSMENT_CHECKS, ASSESSMENT_DOCUMENTS, ASSESSMENT_SECTIONS, fieldApplies } from '../shared/assessment.js';
 import { INVENTORY_REASONS, PRODUCT_ILLUSTRATIONS, STAFF_ROLES } from '../shared/contract.js';
 import { ApiFailure, api, formatDate, formatMoney, setCsrfToken, toMajorText, toMinor } from './api.js';
 import './admin.css';
@@ -13,6 +14,8 @@ const NAV = [
   { path: 'products', label: 'Catalogue', icon: Package, permission: 'catalogue:read' },
   { path: 'inventory', label: 'Inventory', icon: Boxes, permission: 'inventory:read' },
   { path: 'orders', label: 'Orders', icon: ShoppingCart, permission: 'orders:read' },
+  { path: 'applications', label: 'Applications', icon: ClipboardCheck, permission: 'applications:read' },
+  { path: 'agreements', label: 'Agreements', icon: FileText, permission: 'agreements:read' },
   { path: 'staff', label: 'Staff', icon: Users, permission: 'staff:manage' },
   { path: 'settings', label: 'Settings', icon: Settings, permission: 'settings:manage' },
   { path: 'audit', label: 'Audit log', icon: ScrollText, permission: 'audit:read' },
@@ -245,11 +248,11 @@ function Dashboard({ can }) {
           </div>
         </div>
       )}
-      <section className="panel">
+      {data.unavailable?.length > 0 && <section className="panel">
         <h2>Not yet available</h2>
-        <p className="muted">These modules need owner decisions (payment provider, delivery, hire-purchase policy, terms and consent) before they can be built and switched on. The API answers them with a clear "not configured" response rather than pretending to work.</p>
+        <p className="muted">These modules need owner decisions (hire-purchase plans, agreements and legal review) before they can be built and switched on. The API answers them with a clear "not configured" response rather than pretending to work.</p>
         <ul className="pill-list">{data.unavailable.map(item => <li key={item}>{item.replaceAll('_', ' ')}</li>)}</ul>
-      </section>
+      </section>}
     </>
   );
 }
@@ -887,6 +890,10 @@ const SETTING_TITLES = {
   'checkout.pickup': 'In-store collection',
   'checkout.reservationMinutes': 'Stock hold for unpaid orders',
   'checkout.returnsPolicy': 'Returns and warranty wording',
+  'hirePurchase.plans': 'Hire purchase plans',
+  'hirePurchase.agreementTerms': 'Hire purchase agreement wording',
+  'hirePurchase.privacyNotice': 'Hire purchase privacy notice',
+  'hirePurchase.declaration': 'Hire purchase declaration and consent',
 };
 
 const slugify = text => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -913,6 +920,26 @@ const SETTING_FORMS = {
   },
   'checkout.reservationMinutes': { toDraft: value => (value ?? '').toString(), toValue: draft => (draft.trim() ? Number(draft) : null) },
   'checkout.returnsPolicy': { toDraft: value => value ?? '', toValue: draft => draft.trim() || null },
+  'hirePurchase.plans': {
+    toDraft: value => (value ?? []).map(plan => ({ name: plan.name, deposit: String(plan.depositBasisPoints / 100), instalments: String(plan.instalments), charge: String(plan.chargeBasisPoints / 100) })),
+    toValue: draft => {
+      const plans = draft.filter(plan => plan.name.trim());
+      if (!plans.length) return null;
+      return plans.map(plan => {
+        const deposit = Number(plan.deposit);
+        const charge = Number(plan.charge);
+        const instalments = Number(plan.instalments);
+        const invalid = message => new ApiFailure(422, { code: 'validation_failed', message: `${plan.name.trim()}: ${message}` });
+        if (!plan.deposit.trim() || !(deposit >= 1 && deposit <= 90)) throw invalid('the deposit must be between 1% and 90%.');
+        if (!Number.isInteger(instalments) || instalments < 1 || instalments > 60) throw invalid('instalments must be a whole number from 1 to 60.');
+        if (!plan.charge.trim() || !(charge >= 0 && charge <= 300)) throw invalid('the hire charge must be between 0% and 300%.');
+        return { id: slugify(plan.name), name: plan.name.trim(), depositBasisPoints: Math.round(deposit * 100), instalments, chargeBasisPoints: Math.round(charge * 100) };
+      });
+    },
+  },
+  'hirePurchase.agreementTerms': { toDraft: value => value ?? '', toValue: draft => draft.trim() || null },
+  'hirePurchase.privacyNotice': { toDraft: value => value ?? '', toValue: draft => draft.trim() || null },
+  'hirePurchase.declaration': { toDraft: value => value ?? '', toValue: draft => draft.trim() || null },
 };
 
 function SettingEditor({ setting, draft, onChange, currency }) {
@@ -933,6 +960,24 @@ function SettingEditor({ setting, draft, onChange, currency }) {
           <button type="button" className="btn ghost small" onClick={() => onChange([...draft, { name: '', fee: '' }])}><Plus size={14} /> Add area</button>
         </div>
       );
+    case 'hirePurchase.plans':
+      return (
+        <div className="stack">
+          {draft.map((plan, index) => {
+            const set = key => e => onChange(draft.map((p, i) => (i === index ? { ...p, [key]: e.target.value } : p)));
+            return (
+              <div className="plan-row" key={index}>
+                <Field label="Plan name" className="plan-name"><input maxLength={80} placeholder="e.g. Six months" value={plan.name} onChange={set('name')} /></Field>
+                <Field label="Deposit %"><input inputMode="decimal" value={plan.deposit} onChange={set('deposit')} /></Field>
+                <Field label="Monthly payments"><input inputMode="numeric" value={plan.instalments} onChange={set('instalments')} /></Field>
+                <Field label="Hire charge %"><input inputMode="decimal" value={plan.charge} onChange={set('charge')} /></Field>
+                <button type="button" className="icon-btn" aria-label="Remove plan" onClick={() => onChange(draft.filter((_, i) => i !== index))}><Trash2 size={16} /></button>
+              </div>
+            );
+          })}
+          <button type="button" className="btn ghost small" onClick={() => onChange([...draft, { name: '', deposit: '', instalments: '', charge: '' }])}><Plus size={14} /> Add plan</button>
+        </div>
+      );
     case 'checkout.pickup':
       return (
         <div className="two">
@@ -943,7 +988,7 @@ function SettingEditor({ setting, draft, onChange, currency }) {
     case 'checkout.reservationMinutes':
       return <label className="row"><input aria-label={SETTING_TITLES[setting.key]} type="number" min={5} max={1440} value={draft} onChange={e => onChange(e.target.value)} /> <span className="muted small">minutes (5 to 1440)</span></label>;
     default:
-      return <textarea aria-label={SETTING_TITLES[setting.key]} rows={4} maxLength={2000} value={draft} onChange={e => onChange(e.target.value)} />;
+      return <textarea aria-label={SETTING_TITLES[setting.key]} rows={setting.key.startsWith('hirePurchase.') ? 8 : 4} maxLength={setting.key === 'hirePurchase.agreementTerms' ? 30000 : setting.key.startsWith('hirePurchase.') ? 8000 : 2000} value={draft} onChange={e => onChange(e.target.value)} />;
   }
 }
 
@@ -1093,6 +1138,7 @@ function OrderDetail({ reference, can, notify, setReasonRequest }) {
           <div className="row">
             <span className={`chip ${PAYMENT_CHIPS[order.paymentStatus] ?? 'chip-draft'}`}>{PAYMENT_LABELS[order.paymentStatus]}</span>
             <span className="muted small">{FULFILMENT_LABELS[order.fulfilmentStatus]} · placed {formatDate(order.createdAt)}</span>
+            {order.agreementId && <a className="tag hp" href={`#/agreements/${order.agreementId}`}>Hire purchase deposit · {order.agreementId}</a>}
           </div>
         </div>
         <div className="row">
@@ -1134,6 +1180,467 @@ function OrderDetail({ reference, can, notify, setReasonRequest }) {
             <h2>Stock</h2>
             <p className="muted small">{order.stockDeducted ? 'Taken from stock when paid.' : order.stockHeld ? `Held until ${formatDate(order.reservationExpiresAt)}.` : 'Not holding stock.'}</p>
           </section>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+/* ---------- hire purchase applications ---------- */
+
+const APPLICATION_LABELS = { submitted: 'New', under_review: 'Under review', needs_information: 'Waiting on customer', approved: 'Approved', declined: 'Declined', withdrawn: 'Withdrawn' };
+const APPLICATION_CHIPS = { submitted: 'chip-draft', under_review: 'chip-draft', needs_information: 'chip-archived', approved: 'chip-published', declined: 'chip-archived', withdrawn: 'chip-archived' };
+const NOTIFICATION_REASONS = {
+  not_configured: 'Email is not set up on this server.',
+  refused: 'Firebase refused to send it. Check that the Email link sign-in method is switched on.',
+  unreachable: 'Firebase could not be reached.',
+};
+const employmentLabel = value => ASSESSMENT_SECTIONS.find(s => s.id === 'employment').fields.find(f => f.key === 'employmentType').options.find(o => o.value === value)?.label ?? '—';
+
+function answerText(field, value, currency) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (field.type === 'select') return field.options.find(choice => choice.value === value)?.label ?? value;
+  if (field.type === 'money') return formatMoney(value, currency);
+  return String(value);
+}
+
+function Applications() {
+  const [status, setStatus] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const load = useCallback(async cursor => {
+    const params = new URLSearchParams({ ...(status && { status }), ...(cursor && { cursor }) });
+    try {
+      const data = await api('GET', `/admin/applications?${params}`);
+      setResult(prev => (cursor ? { items: [...prev.items, ...data.items], nextCursor: data.nextCursor } : data));
+      setError(null);
+    } catch (failure) {
+      setError(failure);
+    }
+  }, [status]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <>
+      <header className="page-head"><div><p className="eyebrow">Hire purchase</p><h1>Applications</h1></div></header>
+      <p className="muted">Unfinished drafts stay private to the customer. Opening an application is recorded in the audit log.</p>
+      <div className="toolbar">
+        <select aria-label="Filter by status" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="">All applications</option>{Object.keys(APPLICATION_LABELS).map(key => <option key={key} value={key}>{APPLICATION_LABELS[key]}</option>)}
+        </select>
+      </div>
+      <ErrorBanner error={error} />
+      {result && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Applicant</th><th>Work</th><th>Status</th><th>Recommendation</th><th>Submitted</th></tr></thead>
+            <tbody>
+              {result.items.map(item => (
+                <tr key={item.id} onClick={() => go(`applications/${item.id}`)} className="clickable">
+                  <td><a href={`#/applications/${item.id}`} onClick={e => e.stopPropagation()}><strong>{item.name ?? 'No name given'}</strong></a><br /><span className="muted small">{item.email}</span></td>
+                  <td>{employmentLabel(item.employmentType)}</td>
+                  <td><span className={`chip ${APPLICATION_CHIPS[item.status]}`}>{APPLICATION_LABELS[item.status]}</span></td>
+                  <td>{item.recommendation ? (item.recommendation === 'approve' ? 'Approve' : 'Decline') : '—'}</td>
+                  <td className="muted">{formatDate(item.submittedAt)}</td>
+                </tr>
+              ))}
+              {result.items.length === 0 && <tr><td colSpan={5} className="empty-cell">No applications yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {result?.nextCursor && <button className="btn ghost" onClick={() => load(result.nextCursor)}>Load more</button>}
+    </>
+  );
+}
+
+function ReviewPanel({ application, run }) {
+  const [checks, setChecks] = useState(() => application.review?.checks ?? Object.fromEntries(ASSESSMENT_CHECKS.map(check => [check.id, false])));
+  const [recommendation, setRecommendation] = useState(application.review?.recommendation ?? '');
+  const [note, setNote] = useState(application.review?.note ?? '');
+  const [question, setQuestion] = useState('');
+  const save = event => {
+    event.preventDefault();
+    run('PUT', 'review', { checks, recommendation, note }, 'Recommendation saved');
+  };
+  return (
+    <>
+      <form className="panel stack" onSubmit={save}>
+        <h2>Your assessment</h2>
+        <div className="checks">
+          {ASSESSMENT_CHECKS.map(check => (
+            <label key={check.id}><input type="checkbox" checked={checks[check.id]} onChange={e => setChecks({ ...checks, [check.id]: e.target.checked })} /> {check.label}</label>
+          ))}
+        </div>
+        <Field label="Your recommendation">
+          <select required value={recommendation} onChange={e => setRecommendation(e.target.value)}>
+            <option value="">Choose</option><option value="approve">Approve</option><option value="decline">Decline</option>
+          </select>
+        </Field>
+        <Field label="Your notes" hint="For the team only. The customer never sees this."><textarea required rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></Field>
+        <div className="row end"><button className="btn primary">Send to approver</button></div>
+      </form>
+      <form className="panel stack" onSubmit={event => { event.preventDefault(); run('POST', 'request-information', { message: question }, 'Sent to the customer'); }}>
+        <h2>Ask the customer</h2>
+        <Field label="What you need" hint="The customer sees this when they sign in, and can change their answers."><textarea required rows={3} maxLength={1000} value={question} onChange={e => setQuestion(e.target.value)} /></Field>
+        <div className="row end"><button className="btn ghost">Send back to customer</button></div>
+      </form>
+    </>
+  );
+}
+
+function DecisionPanel({ application, currency, run, setError }) {
+  const [amount, setAmount] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [conditions, setConditions] = useState('');
+  const [reason, setReason] = useState('');
+  const decide = outcome => {
+    if (!reason.trim()) { setError(new ApiFailure(422, { code: 'validation_failed', message: 'Record the reason for your decision.' })); return; }
+    if (outcome === 'decline') { run('POST', 'decide', { outcome, reason }, 'Application declined'); return; }
+    const limitMinor = currency ? toMinor(amount.trim(), currency) : null;
+    if (!limitMinor) { setError(new ApiFailure(422, { code: 'validation_failed', message: currency ? 'Enter the approved amount as a number, for example 3000.00.' : 'Set the store currency first.' })); return; }
+    run('POST', 'decide', { outcome, reason, limitMinor, validUntil, conditions: conditions.trim() || null }, 'Customer approved');
+  };
+  return (
+    <form className="panel stack" onSubmit={event => event.preventDefault()}>
+      <h2>Your decision</h2>
+      <p className="muted small">{application.review.staffName} recommends <strong>{application.review.recommendation === 'approve' ? 'approving' : 'declining'}</strong>. You decide the amount and terms, nothing is suggested.</p>
+      <div className="two">
+        <Field label={`Approved amount${currency ? ` (${currency})` : ''}`}><input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+        <Field label="Approval lasts until"><input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} /></Field>
+      </div>
+      <Field label="Conditions" hint="Optional. The customer sees these."><input maxLength={1000} value={conditions} onChange={e => setConditions(e.target.value)} /></Field>
+      <Field label="Reason" hint="Internal. A declined customer only gets a neutral message."><textarea rows={3} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></Field>
+      <div className="row end">
+        <button type="button" className="btn ghost" onClick={() => decide('decline')}>Decline</button>
+        <button type="button" className="btn primary" onClick={() => decide('approve')}>Approve and email link</button>
+      </div>
+    </form>
+  );
+}
+
+/** Files open only on request, because each opening is recorded in the audit log. */
+function DocumentViewer({ applicationId, documents }) {
+  const [open, setOpen] = useState(null);
+  const [failure, setFailure] = useState(null);
+  useEffect(() => () => { if (open) URL.revokeObjectURL(open.url); }, [open]);
+  async function view(type) {
+    setFailure(null);
+    try {
+      const response = await fetch(`/api/v1/admin/applications/${applicationId}/documents/${type}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('unavailable');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      if (blob.type === 'application/pdf') window.open(url, '_blank', 'noopener');
+      setOpen({ type, url, image: blob.type !== 'application/pdf' });
+    } catch {
+      setFailure('This document could not be opened. Please try again.');
+    }
+  }
+  const present = ASSESSMENT_DOCUMENTS.filter(type => documents?.[type.id]);
+  if (!present.length) return <p className="muted small">No documents were uploaded.</p>;
+  return (
+    <div className="stack">
+      <p className="muted small">Opening a document is recorded in the audit log.</p>
+      <div className="row wrap">
+        {present.map(type => <button key={type.id} type="button" className={`btn ghost small ${open?.type === type.id ? 'active' : ''}`} onClick={() => view(type.id)}>{type.label}</button>)}
+      </div>
+      {failure && <span className="field-error">{failure}</span>}
+      {open?.image && <img className="doc-preview" src={open.url} alt={ASSESSMENT_DOCUMENTS.find(type => type.id === open.type).label} />}
+    </div>
+  );
+}
+
+function ApplicationDetail({ id, me, can, currency, notify, setReasonRequest }) {
+  const [application, setApplication] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => { api('GET', `/admin/applications/${id}`).then(setApplication, setError); }, [id]);
+  if (!application) return error ? <ErrorBanner error={error} /> : <p className="muted">Loading…</p>;
+
+  async function run(method, action, body, message) {
+    setError(null);
+    try {
+      setApplication(await api(method, `/admin/applications/${id}/${action}`, { ...body, expectedVersion: application.version }));
+      notify(message);
+    } catch (failure) {
+      setError(failure);
+    }
+  }
+  async function resend() {
+    setError(null);
+    try {
+      setApplication(await api('POST', `/admin/applications/${id}/send-sign-in-link`, {}));
+    } catch (failure) {
+      setError(failure);
+    }
+  }
+  const reopen = () => setReasonRequest({
+    title: 'Reopen this application',
+    description: application.status === 'approved' ? 'The customer loses their approval straight away and the application goes back to review.' : 'The application goes back to review.',
+    confirmLabel: 'Reopen',
+    onConfirm: async reason => {
+      setApplication(await api('POST', `/admin/applications/${id}/reopen`, { reason, expectedVersion: application.version }));
+      notify('Application reopened');
+    },
+  });
+
+  const { status, review, decision, previousDecision, notification, consent } = application;
+  const reviewing = status === 'under_review';
+  const ownRecommendation = review?.staffId === me.id;
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <a className="back" href="#/applications"><ArrowLeft size={15} /> Applications</a>
+          <h1>{application.name ?? 'No name given'}</h1>
+          <div className="row">
+            <span className={`chip ${APPLICATION_CHIPS[status]}`}>{APPLICATION_LABELS[status]}</span>
+            <span className="muted small">{application.email} · submitted {formatDate(application.submittedAt)}{application.assessor && ` · assessor ${application.assessor.staffName}`}</span>
+          </div>
+        </div>
+        <div className="row">
+          {status === 'submitted' && can('applications:review') && <button className="btn primary" onClick={() => run('POST', 'start-review', {}, 'Review started')}>Start review</button>}
+          {['approved', 'declined'].includes(status) && can('applications:decide') && <button className="btn ghost" onClick={reopen}>Reopen</button>}
+        </div>
+      </header>
+      <ErrorBanner error={error} />
+      {status === 'needs_information' && <div className="banner warn"><AlertTriangle size={18} /><div><strong>Waiting on the customer.</strong> <span>{application.informationRequest}</span></div></div>}
+      {notification?.status === 'not_sent' && (
+        <div className="banner warn"><AlertTriangle size={18} /><div>
+          <strong>The sign-in email did not go out.</strong> <span>{NOTIFICATION_REASONS[notification.reason] ?? ''} The customer is still approved and can sign in on the site.</span>
+        </div></div>
+      )}
+      <div className="editor-grid">
+        <div className="stack">
+          {ASSESSMENT_SECTIONS.map(section => (
+            <section className="panel" key={section.id}>
+              <h2>{section.title}</h2>
+              <dl className="store-status">
+                {section.fields.filter(field => fieldApplies(field, application.sections[section.id])).map(field => (
+                  <div key={field.key}><dt>{field.label}</dt><dd>{answerText(field, application.sections[section.id]?.[field.key], currency)}</dd></div>
+                ))}
+              </dl>
+            </section>
+          ))}
+          <section className="panel">
+            <h2>Documents</h2>
+            <DocumentViewer applicationId={id} documents={application.documents} />
+          </section>
+        </div>
+        <aside className="stack">
+          {reviewing && can('applications:review') && <ReviewPanel key={application.version} application={application} run={run} />}
+          {review && (
+            <section className="panel">
+              <h2>Assessment by {review.staffName}</h2>
+              <p className="muted small">Recommends <strong>{review.recommendation === 'approve' ? 'approving' : 'declining'}</strong> · {formatDate(review.recommendedAt)}</p>
+              <ul className="check-result">
+                {ASSESSMENT_CHECKS.map(check => <li key={check.id}>{review.checks[check.id] ? <Check size={14} /> : <X size={14} />} {check.label}</li>)}
+              </ul>
+              <p className="small">{review.note}</p>
+            </section>
+          )}
+          {reviewing && review && can('applications:decide') && (ownRecommendation
+            ? <div className="banner warn"><AlertTriangle size={18} /><div><strong>Someone else must decide.</strong> <span>You made this recommendation, so another approver or the owner makes the decision.</span></div></div>
+            : <DecisionPanel key={application.version} application={application} currency={currency} run={run} setError={setError} />)}
+          {decision && (
+            <section className="panel">
+              <h2>{decision.outcome === 'approve' ? 'Approved' : 'Declined'} by {decision.staffName}</h2>
+              <p className="muted small">{formatDate(decision.decidedAt)}</p>
+              {decision.outcome === 'approve' && (
+                <dl className="store-status">
+                  <div><dt>Approved amount</dt><dd>{formatMoney(decision.limitMinor, decision.currency)}</dd></div>
+                  <div><dt>Lasts until</dt><dd>{decision.validUntil}</dd></div>
+                  {decision.conditions && <div><dt>Conditions</dt><dd>{decision.conditions}</dd></div>}
+                </dl>
+              )}
+              <p className="small">{decision.reason}</p>
+              {status === 'approved' && can('applications:decide') && (
+                <div className="row between">
+                  <span className="muted small">{notification?.status === 'sent' ? `Sign-in email sent ${formatDate(notification.at)}` : 'No sign-in email sent'}</span>
+                  <button className="btn ghost small" onClick={resend}>Send sign-in link</button>
+                </div>
+              )}
+            </section>
+          )}
+          {previousDecision && (
+            <section className="panel">
+              <h2>Earlier decision</h2>
+              <p className="muted small">{previousDecision.outcome === 'approve' ? 'Approved' : 'Declined'} by {previousDecision.staffName}, reopened by {previousDecision.reopenedBy.staffName} on {formatDate(previousDecision.reopenedAt)}.</p>
+              <p className="small">{previousDecision.reopenReason}</p>
+            </section>
+          )}
+          {consent && (
+            <section className="panel">
+              <h2>Consent</h2>
+              <p className="muted small">Agreed {formatDate(consent.acceptedAt)} to privacy notice version {consent.privacyVersion} and declaration version {consent.declarationVersion}.</p>
+              <details className="small"><summary>Wording they agreed to</summary><p>{consent.privacyNotice}</p><p>{consent.declaration}</p></details>
+            </section>
+          )}
+        </aside>
+      </div>
+    </>
+  );
+}
+
+/* ---------- hire purchase agreements ---------- */
+
+const AGREEMENT_LABELS = { awaiting_deposit: 'Deposit due', active: 'Active', completed: 'Paid in full', cancelled: 'Ended' };
+const AGREEMENT_CHIPS = { awaiting_deposit: 'chip-draft', active: 'chip-published', completed: 'chip-archived', cancelled: 'chip-archived' };
+const AGREEMENT_ATTENTION = {
+  payment_mismatch: 'Paystack reported an amount that does not match the instalment, so it was not counted. Check it in your Paystack dashboard.',
+  duplicate_payment: 'A payment arrived for an instalment that was already paid. Check it in your Paystack dashboard and refund if needed.',
+};
+const PAYMENT_METHODS = { paystack: 'Paystack', cash: 'Cash', mobile_money: 'Mobile money', bank_transfer: 'Bank transfer', other: 'Other' };
+
+function Agreements() {
+  const [status, setStatus] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const load = useCallback(async cursor => {
+    const params = new URLSearchParams({ ...(status && { status }), ...(cursor && { cursor }) });
+    try {
+      const data = await api('GET', `/admin/agreements?${params}`);
+      setResult(prev => (cursor ? { items: [...prev.items, ...data.items], nextCursor: data.nextCursor } : data));
+      setError(null);
+    } catch (failure) {
+      setError(failure);
+    }
+  }, [status]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <>
+      <header className="page-head"><div><p className="eyebrow">Hire purchase</p><h1>Agreements</h1></div></header>
+      <div className="toolbar">
+        <select aria-label="Filter by status" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="">All agreements</option>{Object.keys(AGREEMENT_LABELS).map(key => <option key={key} value={key}>{AGREEMENT_LABELS[key]}</option>)}
+        </select>
+      </div>
+      <ErrorBanner error={error} />
+      {result && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Agreement</th><th>Customer</th><th>Product</th><th>Left to pay</th><th>Next due</th><th>Status</th></tr></thead>
+            <tbody>
+              {result.items.map(item => {
+                const next = item.instalments.find(entry => entry.number === item.nextInstalmentNumber);
+                return (
+                  <tr key={item.id} onClick={() => go(`agreements/${item.id}`)} className="clickable">
+                    <td><a href={`#/agreements/${item.id}`} onClick={e => e.stopPropagation()}><strong>{item.id}</strong></a>{item.attention && <span className="tag warn">needs attention</span>}</td>
+                    <td>{item.customer.name}</td>
+                    <td>{item.product.title}</td>
+                    <td>{formatMoney(item.outstandingMinor, item.currency)}</td>
+                    <td>{next?.dueDate ?? '—'}{next?.overdue && <span className="tag warn">overdue</span>}</td>
+                    <td><span className={`chip ${AGREEMENT_CHIPS[item.status]}`}>{AGREEMENT_LABELS[item.status]}</span></td>
+                  </tr>
+                );
+              })}
+              {result.items.length === 0 && <tr><td colSpan={6} className="empty-cell">No agreements yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {result?.nextCursor && <button className="btn ghost" onClick={() => load(result.nextCursor)}>Load more</button>}
+    </>
+  );
+}
+
+function AgreementDetail({ id, can, notify, setReasonRequest }) {
+  const [agreement, setAgreement] = useState(null);
+  const [error, setError] = useState(null);
+  const [method, setMethod] = useState('cash');
+  const [note, setNote] = useState('');
+  useEffect(() => { api('GET', `/admin/agreements/${id}`).then(setAgreement, setError); }, [id]);
+  if (!agreement) return error ? <ErrorBanner error={error} /> : <p className="muted">Loading…</p>;
+
+  const money = amountMinor => formatMoney(amountMinor, agreement.currency);
+  const next = agreement.instalments.find(item => item.number === agreement.nextInstalmentNumber);
+  async function record(event) {
+    event.preventDefault();
+    setError(null);
+    try {
+      setAgreement(await api('POST', `/admin/agreements/${id}/payments`, { method, note, expectedVersion: agreement.version }));
+      setNote('');
+      notify('Payment recorded');
+    } catch (failure) {
+      setError(failure);
+    }
+  }
+  const end = () => setReasonRequest({
+    title: 'End this agreement',
+    description: 'This only records that it ended, and the customer can no longer pay through the site. Handle the goods, refunds and anything owed separately, on legal advice.',
+    confirmLabel: 'End agreement',
+    onConfirm: async reason => {
+      setAgreement(await api('POST', `/admin/agreements/${id}/cancel`, { reason, expectedVersion: agreement.version }));
+      notify('Agreement ended');
+    },
+  });
+  const { figures } = agreement;
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <a className="back" href="#/agreements"><ArrowLeft size={15} /> Agreements</a>
+          <h1>{agreement.id}</h1>
+          <div className="row">
+            <span className={`chip ${AGREEMENT_CHIPS[agreement.status]}`}>{AGREEMENT_LABELS[agreement.status]}</span>
+            <span className="muted small">{agreement.product.title} · accepted {formatDate(agreement.acceptedAt)}</span>
+          </div>
+        </div>
+        {agreement.status === 'active' && can('applications:decide') && <button className="btn ghost" onClick={end}>End agreement</button>}
+      </header>
+      <ErrorBanner error={error} />
+      {agreement.attention && <div className="banner warn"><AlertTriangle size={18} /><div><strong>Needs attention.</strong> <span>{AGREEMENT_ATTENTION[agreement.attention] ?? agreement.attention}</span></div></div>}
+      <div className="editor-grid">
+        <section className="panel">
+          <h2>Instalments</h2>
+          <div className="table-wrap flush">
+            <table>
+              <thead><tr><th>No.</th><th>Due</th><th>Amount</th><th>Status</th><th>How paid</th></tr></thead>
+              <tbody>
+                {agreement.instalments.map(item => (
+                  <tr key={item.number}>
+                    <td>{item.number}</td>
+                    <td>{item.dueDate ?? 'After deposit'}</td>
+                    <td>{money(item.amountMinor)}</td>
+                    <td>{item.status === 'paid' ? `Paid ${formatDate(item.paidAt)}` : item.overdue ? <span className="tag warn">overdue</span> : 'To pay'}</td>
+                    <td className="muted">{PAYMENT_METHODS[item.paymentMethod] ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <details className="small"><summary>Agreement wording they accepted (version {agreement.terms.version})</summary><p className="pre-line">{agreement.terms.wording}</p></details>
+        </section>
+        <aside className="stack">
+          {agreement.status === 'active' && next && can('agreements:payments') && (
+            <form className="panel stack" onSubmit={record}>
+              <h2>Record a payment</h2>
+              <p className="muted small">For money taken outside Paystack. This marks instalment {next.number} ({money(next.amountMinor)}) as paid in full.</p>
+              <Field label="How they paid">
+                <select value={method} onChange={e => setMethod(e.target.value)}>
+                  {['cash', 'mobile_money', 'bank_transfer', 'other'].map(key => <option key={key} value={key}>{PAYMENT_METHODS[key]}</option>)}
+                </select>
+              </Field>
+              <Field label="Receipt or reference"><input required maxLength={300} value={note} onChange={e => setNote(e.target.value)} /></Field>
+              <div className="row end"><button className="btn primary">Record {money(next.amountMinor)}</button></div>
+            </form>
+          )}
+          <section className="panel">
+            <h2>Customer</h2>
+            <p>{agreement.customer.name}<br /><a className="link" href={`tel:${agreement.customer.phone.replace(/\s/g, '')}`}>{agreement.customer.phone}</a><br /><a className="link" href={`mailto:${agreement.customer.email}`}>{agreement.customer.email}</a></p>
+            {can('applications:read') && <a className="link small" href={`#/applications/${agreement.applicationId}`}>Open their application</a>}
+          </section>
+          <section className="panel">
+            <h2>{agreement.plan.name}</h2>
+            <dl className="store-status">
+              <div><dt>Cash price</dt><dd>{money(figures.cashPriceMinor)}</dd></div>
+              <div><dt>Hire charge</dt><dd>{money(figures.chargeMinor)}</dd></div>
+              <div><dt>Hire purchase price</dt><dd>{money(figures.hirePurchasePriceMinor)}</dd></div>
+              <div><dt>Deposit</dt><dd>{money(figures.depositMinor)}</dd></div>
+              <div><dt>Left to pay</dt><dd>{money(agreement.outstandingMinor)}</dd></div>
+            </dl>
+            {can('orders:read') && <a className="link small" href={`#/orders/${agreement.orderReference}`}>Deposit and delivery: {agreement.orderReference}</a>}
+          </section>
+          {agreement.cancelNote && <section className="panel"><h2>Why it ended</h2><p className="small">{agreement.cancelNote}</p></section>}
         </aside>
       </div>
     </>
@@ -1215,6 +1722,10 @@ function Shell({ me, onSignOut }) {
   else if (section === 'staff') page = <Staff me={me} notify={setToast} setReasonRequest={setReasonRequest} />;
   else if (section === 'orders' && id) page = <OrderDetail reference={id} can={can} notify={setToast} setReasonRequest={setReasonRequest} />;
   else if (section === 'orders') page = <Orders />;
+  else if (section === 'applications' && id) page = <ApplicationDetail key={id} id={id} me={me} can={can} currency={currency} notify={setToast} setReasonRequest={setReasonRequest} />;
+  else if (section === 'applications') page = <Applications />;
+  else if (section === 'agreements' && id) page = <AgreementDetail key={id} id={id} can={can} notify={setToast} setReasonRequest={setReasonRequest} />;
+  else if (section === 'agreements') page = <Agreements />;
   else if (section === 'settings') page = <SettingsPage notify={setToast} onCurrencyChange={setCurrency} />;
   else if (section === 'audit') page = <AuditLog />;
 
@@ -1234,7 +1745,7 @@ function Shell({ me, onSignOut }) {
         </div>
       </aside>
       <main className="content">
-        <div className="env-strip">Local environment · Illustrative fixtures · Hire-purchase applications are not connected</div>
+        <div className="env-strip">Local environment · Illustrative fixtures</div>
         {page}
       </main>
       <Toast message={toast} />

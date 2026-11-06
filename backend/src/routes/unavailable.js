@@ -5,20 +5,7 @@ import { fail } from '../http.js';
 const UNAVAILABLE = [
   ['GET', '/me/orders'],
   ['GET', '/me/orders/:id'],
-  ['POST', '/hire-purchase/applications'],
-  ['GET', '/me/applications'],
-  ['GET', '/me/applications/:id'],
-  ['POST', '/me/applications/:id/information'],
-  ['POST', '/me/applications/:id/withdraw'],
-  ['GET', '/me/offers/:id'],
-  ['POST', '/me/offers/:id/accept'],
-  ['GET', '/me/agreements/:id'],
-  ['POST', '/me/agreements/:id/payments'],
-  ['POST', '/uploads/assessment-intent'],
   ['POST', '/webhooks/:provider'],
-  ['GET', '/admin/applications'],
-  ['POST', '/admin/applications/:id/transitions'],
-  ['POST', '/admin/applications/:id/offers'],
   ['GET', '/admin/payments'],
 ];
 

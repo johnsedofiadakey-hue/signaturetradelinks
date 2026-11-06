@@ -10,13 +10,13 @@ export const ROLE_PERMISSIONS = Object.freeze({
   owner: [
     'catalogue:read', 'catalogue:write', 'catalogue:publish', 'catalogue:hire_purchase',
     'inventory:read', 'inventory:adjust', 'staff:manage', 'audit:read', 'settings:manage', 'dashboard:read',
-    'orders:read', 'orders:fulfil',
+    'orders:read', 'orders:fulfil', 'applications:read', 'applications:review', 'applications:decide', 'agreements:read', 'agreements:payments',
   ],
   catalogue_manager: ['catalogue:read', 'catalogue:write', 'catalogue:publish', 'inventory:read', 'inventory:adjust', 'dashboard:read'],
   // Approvers decide hire-purchase policy, so they control which products are eligible.
-  approver: ['catalogue:read', 'catalogue:hire_purchase', 'dashboard:read'],
-  assessor: ['catalogue:read', 'dashboard:read'],
-  finance: ['catalogue:read', 'inventory:read', 'dashboard:read', 'orders:read'],
+  approver: ['catalogue:read', 'catalogue:hire_purchase', 'dashboard:read', 'applications:read', 'applications:decide', 'agreements:read'],
+  assessor: ['catalogue:read', 'dashboard:read', 'applications:read', 'applications:review'],
+  finance: ['catalogue:read', 'inventory:read', 'dashboard:read', 'orders:read', 'agreements:read', 'agreements:payments'],
   fulfilment: ['catalogue:read', 'inventory:read', 'dashboard:read', 'orders:read', 'orders:fulfil'],
 });
 
@@ -55,6 +55,10 @@ export const SETTINGS = Object.freeze({
   'checkout.pickup': { description: 'Store address and opening hours for in-store collection.' },
   'checkout.reservationMinutes': { description: 'How long stock is held for an unpaid order before it is released.' },
   'checkout.returnsPolicy': { description: 'Returns and warranty wording shown to customers at checkout.' },
+  'hirePurchase.privacyNotice': { description: 'Privacy notice shown before someone submits a hire-purchase application. Applications stay closed until it is set.' },
+  'hirePurchase.plans': { description: 'The hire purchase plans you offer: deposit, number of monthly instalments and hire charge. Buying stays closed until at least one is set.' },
+  'hirePurchase.agreementTerms': { description: 'The hire purchase agreement customers accept before paying a deposit. Buying stays closed until it is set. Have it legally reviewed first.' },
+  'hirePurchase.declaration': { description: 'The declaration and consent an applicant agrees to when submitting. Applications stay closed until it is set. Have it legally reviewed first.' },
 });
 
 // Fulfilment moves forward only. Cancelling is separate because it also releases stock.
@@ -68,7 +72,6 @@ export const ORDER_FULFILMENT_TRANSITIONS = Object.freeze({
 export const ORDER_PAYMENT_STATUSES = Object.freeze(['pending_payment', 'paid', 'payment_expired', 'refund_pending', 'partially_refunded', 'refunded']);
 export const ORDER_FULFILMENT_STATUSES = Object.freeze(['not_started', 'processing', 'dispatched', 'delivered', 'cancelled']);
 export const APPLICATION_STATUSES = Object.freeze(['draft', 'submitted', 'under_review', 'needs_information', 'approved', 'declined', 'withdrawn']);
-export const OFFER_STATUSES = Object.freeze(['draft', 'issued', 'accepted', 'declined', 'expired', 'superseded']);
 export const AGREEMENT_STATUSES = Object.freeze(['awaiting_deposit', 'active', 'completed', 'cancelled']);
 
 export const ERROR_CODES = Object.freeze({
@@ -79,13 +82,16 @@ export const ERROR_CODES = Object.freeze({
   invalid_signature: 401,
   invalid_credentials: 401,
   forbidden: 403,
+  not_approved: 403,
   csrf_failed: 403,
   not_found: 404,
   stale_version: 409,
+  separation_of_duties: 409,
   conflict: 409,
   invalid_transition: 409,
   insufficient_stock: 409,
   item_unavailable: 409,
+  limit_exceeded: 409,
   price_changed: 409,
   order_expired: 409,
   refund_required: 409,

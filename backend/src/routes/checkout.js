@@ -2,6 +2,7 @@
 // (returned once, when the order is created) is what lets a browser read it or pay for it.
 import { RateLimiter, safeEqual } from '../auth.js';
 import { stockLevels } from '../catalogue.js';
+import { applyInstalmentPayment, isInstalmentReference } from '../agreements.js';
 import { C, read, transaction } from '../firestore.js';
 import { fail, readRaw } from '../http.js';
 import { idempotent } from '../idempotency.js';
@@ -13,7 +14,7 @@ import { EMAIL, SKU, arrayOf, int, shape, str, validate } from '../validate.js';
 const itemsRule = arrayOf(shape({ sku: str({ max: 40, pattern: SKU, patternMessage: 'Invalid SKU.' }), quantity: int({ min: 1, max: 20 }) }), { max: 20 });
 
 // A delivery needs a zone; collection needs nothing else. Anything else is rejected.
-const fulfilmentRule = input => {
+export const fulfilmentRule = input => {
   if (input?.method === 'pickup' && Object.keys(input).length === 1) return { value: { method: 'pickup' } };
   if (input?.method === 'delivery' && typeof input.zoneId === 'string' && Object.keys(input).length === 2) return { value: { method: 'delivery', zoneId: input.zoneId } };
   return { error: 'Choose delivery to an area, or in-store collection.' };
@@ -25,7 +26,7 @@ const contactRule = shape({
   email: str({ max: 200, pattern: EMAIL, patternMessage: 'Enter a valid email address.' }),
 });
 
-const addressRule = shape({
+export const addressRule = shape({
   digitalAddress: str({ max: 20, pattern: /^[A-Za-z]{2}-?\d{3,4}-?\d{3,4}$/, patternMessage: 'Use a GhanaPostGPS address such as GA-183-8164.' }),
   area: str({ max: 120 }),
   landmark: str({ min: 0, max: 200 }),
@@ -74,7 +75,7 @@ async function loadOwnedOrder(ctx, { expire = true } = {}) {
 }
 
 /** Only ever return customers to our own site after payment. */
-function returnOrigin(ctx) {
+export function returnOrigin(ctx) {
   const origin = ctx.req.headers.origin;
   const allowed = ctx.config.allowedOrigins.includes(origin) || (ctx.config.allowLoopbackOrigins && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin ?? ''));
   return allowed ? origin : ctx.config.allowedOrigins[0];
@@ -176,7 +177,8 @@ export function registerCheckout(route, db, payments, config) {
     let event;
     try { event = JSON.parse(raw.toString('utf8')); } catch { fail('invalid_json', 'The request body is not valid JSON.'); }
     if (event.event === 'charge.success' && event.data?.status === 'success' && typeof event.data.reference === 'string') {
-      await applyVerifiedPayment(ctx.db, {
+      const apply = isInstalmentReference(event.data.reference) ? applyInstalmentPayment : applyVerifiedPayment;
+      await apply(ctx.db, {
         reference: event.data.reference, amountMinor: event.data.amount, currency: event.data.currency,
         providerId: String(event.data.id), paidAt: event.data.paid_at ?? null, source: 'webhook',
       });

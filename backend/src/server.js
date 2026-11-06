@@ -5,7 +5,11 @@ import { loadConfig } from './config.js';
 import { openFirestore } from './firestore.js';
 
 const config = loadConfig();
-if (config.projectId?.startsWith('demo-')) process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8085';
+if (config.projectId?.startsWith('demo-')) {
+  process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8085';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9109';
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= '127.0.0.1:9209';
+}
 const db = openFirestore(config.projectId);
 const server = createServer(createApp({ db, config }));
 
