@@ -91,7 +91,7 @@ export default function Checkout() {
 
   async function pay(event) {
     event.preventDefault();
-    if (!quote || busy) return;
+    if (!quote || busy || !options?.canOrder) return;
     setBusy(true);
     setErrors({});
     setSubmitError(null);
@@ -136,7 +136,8 @@ export default function Checkout() {
     );
   }
 
-  const closed = options && !options.canOrder;
+  // With prices and delivery set, customers can see their total; only paying waits for the payment setup.
+  const closed = options && !options.canQuote;
   return (
     <main className="checkout section">
       <nav className="breadcrumb" aria-label="Breadcrumb"><Link to="/shop"><ArrowLeft size={14} /> Continue shopping</Link></nav>
@@ -153,7 +154,7 @@ export default function Checkout() {
               </div>
             </div>
           )}
-          {options?.canOrder && (
+          {options?.canQuote && (
             <form className="co-form" onSubmit={pay} noValidate={false}>
               <section className="co-section">
                 <h2><span className="step-number">1</span> Your details</h2>
@@ -203,16 +204,20 @@ export default function Checkout() {
 
               <section className="co-section">
                 <h2><span className="step-number">3</span> Review and pay</h2>
-                <details className="co-policy">
-                  <summary>Returns and warranty</summary>
-                  <p>{options.returnsPolicy}</p>
-                </details>
+                {options.returnsPolicy && (
+                  <details className="co-policy">
+                    <summary>Returns and warranty</summary>
+                    <p>{options.returnsPolicy}</p>
+                  </details>
+                )}
                 <SecurePayment />
                 {submitError && <p className="co-error" role="alert">{submitError}</p>}
-                <button className="button dark full" disabled={!quote || busy || hasUnsellable}>
+                <button className="button dark full" disabled={!quote || busy || hasUnsellable || !options.canOrder}>
                   {busy ? 'Taking you to payment…' : quote ? `Pay ${money(quote.totalMinor, quote.currency)}` : 'Choose how you’ll get it'} <ShieldCheck size={18} />
                 </button>
-                <p className="muted small">You’ll finish on Paystack’s page, then come back here. We hold your items for {options.reservationMinutes} minutes while you pay.</p>
+                {options.canOrder
+                  ? <p className="muted small">You’ll finish on Paystack’s page, then come back here. We hold your items for {options.reservationMinutes} minutes while you pay.</p>
+                  : <p className="muted small" role="status">Online payment isn’t switched on yet, so orders can’t be placed. Your cart is saved on this device.</p>}
               </section>
             </form>
           )}

@@ -203,7 +203,7 @@ export function Footer({ onHelp, note, hirePurchase = false }) {
         </div>
       )}
       {showPayment && <div className="footer-pay"><span>Secure payment by Paystack</span><PaymentBadges /></div>}
-      <div className="footer-bottom"><span>© {new Date().getFullYear()} Signature Tradelink.</span><span>{note}</span></div>
+      <div className="footer-bottom"><span>© {new Date().getFullYear()} Signature Tradelink.</span><span>{note}</span><a className="footer-admin" href="/admin/">Admin</a></div>
     </footer>
   );
 }
