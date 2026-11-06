@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { ArrowUpRight, Grid2X2, Headphones, Plus, ShoppingCart, Smartphone, Tv, WashingMachine, Wind } from 'lucide-react';
 import HeroCarousel from '../components/HeroCarousel';
+import ShoppingConfidence, { ProductFacts } from '../components/ShoppingConfidence';
+import ShoppableRoom from '../components/ShoppableRoom';
 import {CardDiscoveryActions,ProductFinderBanner,RecentlyViewed,useDiscovery} from '../discovery/DiscoveryProvider';
 import AssessmentPath from '../components/AssessmentPath';
 import { categoryPhotos, productMedia } from '../productMedia';
@@ -56,6 +58,7 @@ export function ProductCard({ product, to, shopActions = false }) {
         <span>{product.category}</span>
         <h3><Link to={to}>{product.name}</Link></h3>
         <p className="price">{formatPrice(product.price)}{product.availability === 'out_of_stock' && <span className="stock-note">Out of stock</span>}</p>
+        {!to.startsWith('/hire-purchase') && <ProductFacts product={product}/>}
         {shopActions && <AddToCart product={product} to={to} />}
         {!to.startsWith('/hire-purchase') && <CardDiscoveryActions product={product}/>}
       </div>
@@ -95,15 +98,14 @@ export default function RetailHome() {
       </section>
 
       <RecentlyViewed/>
-      <section className="lifestyle-feature" aria-labelledby="lifestyle-title" data-reveal>
-        <div className="lifestyle-media"><img src="/editorial/living-room-v1.webp" alt="AI-generated bright living-room concept with television, soundbar and subwoofer" loading="lazy" decoding="async"/><span className="editorial-label">AI-generated room concept</span></div>
-        <div className="lifestyle-copy"><span className="editorial-number" aria-hidden="true">01 / THE HOME EDIT</span><h2 id="lifestyle-title">Make a <br/>night of it.</h2><p>A bigger picture. A little more atmosphere.</p><div className="lifestyle-links"><Link to="/shop/tv-and-entertainment">Explore televisions <ArrowUpRight size={17}/></Link><Link to="/shop/audio">Explore home audio <ArrowUpRight size={17}/></Link></div><svg className="editorial-wave" viewBox="0 0 180 40" fill="none" aria-hidden="true"><path d="M1 20H42C58 20 59 4 73 4S88 36 104 36S122 20 139 20H179"/></svg></div>
-      </section>
+      <ShoppableRoom/>
 
       <section className="hp-signpost signature-hp" data-reveal>
         <div className="hp-signpost-copy"><p className="eyebrow">ANOTHER WAY TO YOUR NEXT UPGRADE</p><h2>Your upgrade.<br/>Your way to pay.</h2><p>Apply for assessment, then explore eligible products in our dedicated hire-purchase store.</p><Link className="button outline" to="/hire-purchase">Explore hire purchase <ArrowUpRight size={18}/></Link><small>Subject to assessment and approval.</small></div>
         <AssessmentPath/>
       </section>
+
+      <ShoppingConfidence/>
 
       <section className="faq-section section" data-reveal>
         <div><p className="eyebrow">A FEW THINGS TO KNOW</p><h2>Good questions.<br />Clear answers.</h2></div>

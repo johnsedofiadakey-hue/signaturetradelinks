@@ -7,6 +7,7 @@ import './clean.css';
 import './stores.css';
 import './landing.css';
 import './discovery/discovery.css';
+import './shopping-polish.css';
 import {DiscoveryProvider} from './discovery/DiscoveryProvider';
 import { Footer, HelpDialog, HirePurchaseHeader, PreviewStrip, RetailHeader, Toast } from './components/shared';
 import HirePurchaseHome from './hire-purchase/HirePurchaseHome';

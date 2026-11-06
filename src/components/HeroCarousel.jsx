@@ -1,9 +1,9 @@
 // The first thing a visitor sees: what we sell, in one changing word, and the two ways to pay for it.
 import {useEffect,useRef,useState} from 'react';
-import {ArrowUpRight,Pause,Play} from 'lucide-react';
+import {ArrowUpRight,ChevronLeft,ChevronRight,Pause,Play} from 'lucide-react';
 import {Link} from '../router';
 
-const duration=3200;
+const duration=5000;
 const features=[
  {id:'tv',word:'TV',category:'tv-and-entertainment',image:'/hero/lg-oled-hero-v1.webp',alt:'AI-retouched LG OLED television with magenta and blue screen artwork'},
  {id:'fridge',word:'fridge',category:'home-appliances',image:'/hero/lg-fridge-hero-v1.webp',alt:'AI-retouched graphite LG InstaView refrigerator'},
@@ -21,7 +21,7 @@ export default function HeroCarousel(){
  useEffect(()=>{if(stopped)return;const timer=setInterval(()=>{if(!document.hidden)setActive(i=>(i+1)%features.length)},duration);return()=>clearInterval(timer)},[active,stopped]);
  function change(delta){setActive(i=>(i+delta+features.length)%features.length)}
  const slide=features[active];
- return <section ref={root} className="sell-hero" data-feature={slide.id} aria-label="Welcome" onFocusCapture={()=>setFocused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setFocused(false)}} onKeyDown={e=>{if(e.key==='ArrowRight')change(1);if(e.key==='ArrowLeft')change(-1)}}>
+ return <section ref={root} className="sell-hero" data-feature={slide.id} aria-label="Featured products" aria-roledescription="carousel" onFocusCapture={()=>setFocused(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setFocused(false)}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();change(1)}if(e.key==='ArrowLeft'){e.preventDefault();change(-1)}}}>
   <h1 className="sell-hero-title">
    <span className="sell-hero-sr">Your next TV, fridge, washer, AC, sound system or phone.</span>
    <span aria-hidden="true">Your next<span className="sell-hero-word" key={slide.id}>{slide.word}.</span></span>
@@ -30,7 +30,9 @@ export default function HeroCarousel(){
    <Link className="sell-hero-stage" to={`/shop/${slide.category}`} aria-label={`Shop for your next ${slide.word}`}>
     {features.map((s,i)=><img key={s.id} className={i===active?'is-active':''} src={s.image} alt={i===active?s.alt:''} fetchPriority={i===0?'high':'low'} decoding={i===0?'sync':'async'}/>)}
    </Link>
-   <div className="sell-hero-foot"><span>AI-retouched image</span><button type="button" aria-label={paused?'Resume changing products':'Pause changing products'} aria-pressed={paused} onClick={()=>setPaused(v=>!v)}>{paused?<Play size={12}/>:<Pause size={12}/>}</button></div>
+   <div className="hero-navigation" aria-label="Featured product controls"><button type="button" className="hero-arrow" aria-label="Previous product" onClick={()=>change(-1)}><ChevronLeft size={18}/></button><div className="hero-selectors">{features.map((feature,index)=><button key={feature.id} type="button" className={active===index?'active':''} aria-label={`Show ${feature.word}`} aria-pressed={active===index} onClick={()=>setActive(index)}><span aria-hidden="true"/><span className="sell-hero-sr">{feature.word}</span></button>)}</div><button type="button" className="hero-arrow" aria-label="Next product" onClick={()=>change(1)}><ChevronRight size={18}/></button></div>
+   <div className="hero-progress" key={`${slide.id}-${stopped}`} aria-hidden="true"><span style={{animationDuration:`${duration}ms`,animationPlayState:stopped?'paused':'running'}}/></div>
+   <div className="sell-hero-foot"><span>AI-retouched image · {active+1}/{features.length}</span><button type="button" aria-label={paused?'Resume changing products':'Pause changing products'} aria-pressed={paused} onClick={()=>setPaused(v=>!v)}>{paused?<Play size={12}/>:<Pause size={12}/>}</button></div>
   </div>
   <div className="sell-hero-offer">
    <p>Pay in full, or monthly.</p>
