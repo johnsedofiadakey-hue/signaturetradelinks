@@ -177,3 +177,16 @@ These need a Ghanaian lawyer, not software:
 3. **Hire-purchase accounts and assessment:** customer sign-in, the application form, private document upload and the admin assessment queue. This can be built against the proposed question set and adjusted after the owner confirms it.
 4. **Approval and the magic-link email**, once the sending domain exists.
 5. **Hire-purchase buying and agreements**, once the plans and the legal review are done.
+
+## What is built (steps 3 to 5)
+
+Built and tested: applicant sign-in (Google or emailed link), the saved assessment form, document uploads, submission with recorded consent, the staff queue, assessor recommendation, approver decision, reopening, the approved account, plans, agreements, deposits and instalments. Where it differs from the plan above:
+
+- **The approval email is Firebase's own sign-in email**, so it works without an email provider. Its wording is a generic "sign in" message and it lands on the account page that says "You're approved". Replace `firebaseSignInEmail` in `backend/src/customers.js` when a provider and domain are chosen.
+- **Only the approval sends an email.** Information requests, declines, receipts and instalment reminders need an email provider, which has not been chosen. Customers see them when they sign in.
+- **Documents pass only through the API**, instead of using short-lived links. Nothing a browser holds can be shared, and every staff view is audited. It needs one grant: the API's service account must be able to read and write the bucket.
+- **Buying has no built-in commercial terms.** The owner sets each plan (deposit, number of monthly instalments, hire charge on the balance) and the agreement wording. Until they are set, along with Paystack and the checkout settings, buying stays closed.
+- **Not included, on purpose:** late fees, partial payments, automatic reminders and repossession steps. Each needs a policy and legal advice. Staff can record a whole instalment paid in person and record that an agreement has ended.
+- Anyone can sign in, because they must sign in to apply, but they only ever see their own application. Buying needs a current approval.
+
+To open applications the owner must: switch on the Google and Email link sign-in methods; create the Storage bucket and give the API access (`roles/storage.objectAdmin` for `stl-api@signaturetradelinks.iam.gserviceaccount.com` on that bucket); set the privacy notice and declaration after legal review; and have at least two staff able to act, because nobody can approve their own recommendation. To open buying, also set the plans and agreement wording, and turn on Paystack.

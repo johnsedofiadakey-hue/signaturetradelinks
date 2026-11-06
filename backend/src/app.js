@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { API_BASE } from '../../shared/contract.js';
-import { ApiError, readJson, send } from './http.js';
+import { ApiError, readJson, send, sendFile } from './http.js';
 import { registerPublic } from './routes/public.js';
 import { registerAdminAuth } from './routes/admin-auth.js';
 import { registerAdminCatalogue } from './routes/admin-catalogue.js';
@@ -9,7 +9,13 @@ import { registerAdminStaff } from './routes/admin-staff.js';
 import { registerAdminOperations } from './routes/admin-operations.js';
 import { registerCheckout } from './routes/checkout.js';
 import { registerAdminOrders } from './routes/admin-orders.js';
+import { registerHirePurchase } from './routes/hire-purchase.js';
+import { registerAdminApplications } from './routes/admin-applications.js';
+import { registerHirePurchaseBuying } from './routes/hire-purchase-buying.js';
+import { registerAdminAgreements } from './routes/admin-agreements.js';
 import { registerUnavailable } from './routes/unavailable.js';
+import { firebaseCustomerAuth, firebaseSignInEmail } from './customers.js';
+import { firebaseDocumentStore } from './documents.js';
 import { paystackProvider } from './paystack.js';
 
 function compile(path) {
@@ -19,7 +25,13 @@ function compile(path) {
 }
 
 /** Build the API request handler. Everything stateful is injected so tests can run against isolated emulator projects. */
-export function createApp({ db, config, log = console, payments = paystackProvider({ secretKey: config.paystackSecretKey, log }) }) {
+export function createApp({
+  db, config, log = console,
+  payments = paystackProvider({ secretKey: config.paystackSecretKey, log }),
+  customerAuth = firebaseCustomerAuth(db),
+  signInEmail = firebaseSignInEmail({ apiKey: config.firebaseWebApiKey, publicOrigin: config.publicOrigin, log }),
+  documents = firebaseDocumentStore(db, config.storageBucket, log),
+}) {
   const routes = [];
   const route = (method, path, handler, options = {}) => routes.push({ method, path, handler, options, ...compile(path) });
 
@@ -31,6 +43,10 @@ export function createApp({ db, config, log = console, payments = paystackProvid
   registerAdminOperations(route);
   registerCheckout(route, db, payments, config);
   registerAdminOrders(route);
+  registerHirePurchase(route, customerAuth, documents);
+  registerAdminApplications(route, signInEmail, documents);
+  registerHirePurchaseBuying(route, customerAuth, payments);
+  registerAdminAgreements(route);
   registerUnavailable(route);
 
   function match(method, pathname) {
@@ -67,6 +83,7 @@ export function createApp({ db, config, log = console, payments = paystackProvid
       const ctx = { req, res, db, config, params, query: url.searchParams, body, requestId, ip };
       const result = await candidate.handler(ctx);
       status = result.status ?? 200;
+      if (result.file) { sendFile(res, result.file, { 'X-Request-Id': requestId }); return; }
       send(res, status, status === 204 ? null : { data: result.data, requestId }, { 'X-Request-Id': requestId, ...result.headers });
     } catch (error) {
       if (!(error instanceof ApiError)) {

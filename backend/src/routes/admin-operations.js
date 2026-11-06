@@ -16,6 +16,17 @@ const SETTING_RULES = {
   'checkout.pickup': shape({ address: str({ max: 300 }), hours: str({ max: 200 }) }),
   'checkout.reservationMinutes': int({ min: 5, max: 1440 }),
   'checkout.returnsPolicy': str({ max: 2000 }),
+  'hirePurchase.plans': arrayOf(shape({
+    id: str({ max: 60, pattern: SLUG, patternMessage: 'Use lowercase letters, numbers and hyphens.' }),
+    name: str({ max: 80 }),
+    // A deposit is required because a payment of nothing can't be taken, and it starts the agreement.
+    depositBasisPoints: int({ min: 100, max: 9000 }),
+    instalments: int({ min: 1, max: 60 }),
+    chargeBasisPoints: int({ min: 0, max: 30_000 }),
+  }), { max: 20 }),
+  'hirePurchase.agreementTerms': str({ max: 30_000 }),
+  'hirePurchase.privacyNotice': str({ max: 8000 }),
+  'hirePurchase.declaration': str({ max: 8000 }),
 };
 
 const settingDto = (key, data) => ({
@@ -47,8 +58,6 @@ export function registerAdminOperations(route) {
           outOfStock: active.filter(v => (stock.get(v.sku)?.available ?? 0) <= 0).length,
         },
         settingsMissing: Object.keys(SETTINGS).filter(key => !configured.has(key)),
-        // Modules that need owner decisions before they can be built or switched on.
-        unavailable: ['hire_purchase_applications', 'agreements'],
       },
     };
   });

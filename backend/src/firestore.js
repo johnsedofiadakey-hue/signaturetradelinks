@@ -20,7 +20,14 @@ export const C = Object.freeze({
   settings: 'settings',
   orders: 'orders', // doc id is the customer-facing reference
   payments: 'payments', // verified provider payments, one per order reference
+  hpAgreements: 'hpAgreements', // doc id is the customer-facing agreement number
+  hpApplications: 'hpApplications', // one per customer, doc id is the Firebase Auth uid; holds personal data
 });
+
+const appsByDb = new WeakMap();
+
+/** The Firebase app behind a Firestore handle, for services such as Auth that share its project. */
+export const appOf = db => appsByDb.get(db);
 
 /**
  * Open Firestore for a project. Uses the emulator when FIRESTORE_EMULATOR_HOST is set.
@@ -37,6 +44,7 @@ export function openFirestore(projectId) {
   }
   const db = getFirestore(app);
   db.settings({ ignoreUndefinedProperties: true });
+  appsByDb.set(db, app);
   return db;
 }
 

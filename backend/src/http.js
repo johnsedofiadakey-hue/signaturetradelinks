@@ -15,17 +15,22 @@ export const fail = (code, message, extra) => { throw new ApiError(code, message
 const MAX_BODY_BYTES = 100_000;
 
 /** The request body as bytes. Webhook signatures are computed over exactly these bytes. */
-export async function readRaw(req) {
+export async function readRaw(req, maxBytes = MAX_BODY_BYTES) {
   if (Buffer.isBuffer(req.rawBody)) {
     // Cloud Functions has already consumed the stream and exposes the bytes as rawBody.
-    if (req.rawBody.length > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
+    if (req.rawBody.length > maxBytes) fail('payload_too_large', 'The request body is too large.');
     return req.rawBody;
+  }
+  // Refuse an oversized body up front. Draining it lets the client read the error instead of seeing a dropped connection.
+  if (Number(req.headers['content-length']) > maxBytes) {
+    req.resume();
+    fail('payload_too_large', 'The request body is too large.');
   }
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) fail('payload_too_large', 'The request body is too large.');
+    if (size > maxBytes) fail('payload_too_large', 'The request body is too large.');
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -56,6 +61,12 @@ const BASE_HEADERS = {
   'Referrer-Policy': 'no-referrer',
   'Cross-Origin-Resource-Policy': 'same-origin',
 };
+
+/** Send a stored file. The sandbox stops anything inside it from running if it is ever opened directly. */
+export function sendFile(res, { bytes, contentType }, headers = {}) {
+  res.writeHead(200, { ...BASE_HEADERS, 'Content-Type': contentType, 'Content-Length': bytes.length, 'Content-Disposition': 'inline', 'Content-Security-Policy': "default-src 'none'; sandbox", ...headers });
+  res.end(bytes);
+}
 
 export function send(res, status, payload, headers = {}) {
   const body = status === 204 ? '' : JSON.stringify(payload);

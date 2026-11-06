@@ -6,7 +6,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "emulators": "sh backend/scripts/with-java21.sh firebase emulators:start --only firestore --project demo-signature $([ -f backend/.emulator-data/firebase-export-metadata.json ] && echo --import backend/.emulator-data) --export-on-exit backend/.emulator-data",
+    "emulators": "sh backend/scripts/with-java21.sh firebase emulators:start --only firestore,auth,storage --project demo-signature $([ -f backend/.emulator-data/firebase-export-metadata.json ] && echo --import backend/.emulator-data) --export-on-exit backend/.emulator-data",
     "api": "node backend/src/server.js",
     "api:watch": "node --watch backend/src/server.js",
     "admin:bootstrap": "node backend/scripts/bootstrap-owner.js",
@@ -20,6 +20,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "firebase": "^11.10.0",
     "firebase-admin": "^14.5.0",
     "firebase-functions": "^7.4.0",
     "lucide-react": "^1.69.0",

@@ -106,11 +106,11 @@ describe('services that are not configured yet', () => {
   before(async () => { server = await startTestServer(); });
   after(() => server.close());
 
-  test('checkout, orders, hire purchase and webhooks fail loudly with 503', async () => {
+  test('checkout, orders, payment lists and webhooks fail loudly with 503', async () => {
     const anonymous = client(server.base);
     for (const [method, path] of [
-      ['POST', '/checkout/quote'], ['POST', '/orders'], ['POST', '/hire-purchase/applications'],
-      ['GET', '/me/orders'], ['POST', '/webhooks/provider'], ['POST', '/me/offers/off_1/accept'],
+      ['POST', '/checkout/quote'], ['POST', '/orders'], ['GET', '/admin/payments'],
+      ['GET', '/me/orders'], ['POST', '/webhooks/provider'],
     ]) {
       const result = await anonymous.request(method, path, method === 'POST' ? {} : undefined);
       assert.equal(result.status, 503, `${method} ${path}`);

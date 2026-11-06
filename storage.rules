@@ -1,0 +1,9 @@
+rules_version = '2';
+// Assessment documents are private. Browsers never reach this bucket; the API reads and writes it with its own account.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

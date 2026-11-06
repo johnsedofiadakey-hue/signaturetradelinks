@@ -165,6 +165,7 @@ export function HirePurchaseHeader({ onHelp }) {
         <button onClick={() => go('/hire-purchase#eligible')}>Eligible products</button>
         <button onClick={() => go('/hire-purchase#what-you-need')}>What you need</button>
         <button onClick={() => { setMenu(false); onHelp(); }}>Help</button>
+        <button onClick={() => go('/hire-purchase/account')}>Your account</button>
       </nav>
       <div className="header-actions">
         <Link className="hp-shop-link" to="/shop">Back to the shop</Link>
