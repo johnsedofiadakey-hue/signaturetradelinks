@@ -170,7 +170,6 @@ export function HirePurchaseHeader({ onHelp }) {
         <button onClick={() => go('/hire-purchase/account')}>Your account</button>
       </nav>
       <div className="header-actions">
-        <Link className="hp-shop-link" to="/shop">Back to the shop</Link>
         <Link className="button dark compact" to="/hire-purchase/apply">Apply</Link>
         <button className="icon-button mobile-menu" aria-label="Toggle menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
       </div>
@@ -178,20 +177,31 @@ export function HirePurchaseHeader({ onHelp }) {
   );
 }
 
-export function Footer({ onHelp, note, showPayment = false }) {
+export function Footer({ onHelp, note, hirePurchase = false }) {
+  const showPayment = !hirePurchase;
   return (
     <footer>
       <div className="footer-top">
-        <BrandLogo />
-        <p>Good tech.<br />More possibilities.</p>
-        <button onClick={onHelp}>Let’s talk upgrades <ArrowUpRight size={20} /></button>
+        <BrandLogo to={hirePurchase ? '/hire-purchase' : '/'} />
+        <p>{hirePurchase ? <>Apply once.<br />Buy through your account.</> : <>Good tech.<br />More possibilities.</>}</p>
+        <button onClick={onHelp}>{hirePurchase ? 'Ask about hire purchase' : 'Let’s talk upgrades'} <ArrowUpRight size={20} /></button>
       </div>
-      <div className="footer-links">
-        <Link to="/shop">Shop</Link>
-        <Link to="/hire-purchase">Hire purchase</Link>
-        <Link to="/wishlist">Wishlist</Link>
-        <Link to="/checkout">Checkout</Link>
-      </div>
+      {hirePurchase ? (
+        <div className="footer-links">
+          <Link to="/hire-purchase#how-it-works">How it works</Link>
+          <Link to="/hire-purchase#eligible">Eligible products</Link>
+          <Link to="/hire-purchase/apply">Apply</Link>
+          <Link to="/hire-purchase/account">Your account</Link>
+          <Link to="/">Main shop</Link>
+        </div>
+      ) : (
+        <div className="footer-links">
+          <Link to="/shop">Shop</Link>
+          <Link to="/wishlist">Wishlist</Link>
+          <Link to="/checkout">Checkout</Link>
+          <Link to="/hire-purchase">Hire purchase</Link>
+        </div>
+      )}
       {showPayment && <div className="footer-pay"><span>Secure payment by Paystack</span><PaymentBadges /></div>}
       <div className="footer-bottom"><span>© {new Date().getFullYear()} Signature Tradelink.</span><span>{note}</span></div>
     </footer>

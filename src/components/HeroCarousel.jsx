@@ -1,16 +1,16 @@
-// The first thing a visitor sees: what we sell, in one changing word, and the two ways to pay for it.
+// The first thing a visitor sees: what we sell, in one changing word, and how to buy it now.
 import {useEffect,useRef,useState} from 'react';
 import {ArrowUpRight,ChevronLeft,ChevronRight,Pause,Play} from 'lucide-react';
 import {Link} from '../router';
 
 const duration=5000;
 const features=[
- {id:'tv',word:'TV',category:'tv-and-entertainment',image:'/hero/lg-oled-hero-v1.webp',alt:'AI-retouched LG OLED television with magenta and blue screen artwork'},
- {id:'fridge',word:'fridge',category:'home-appliances',image:'/hero/lg-fridge-hero-v1.webp',alt:'AI-retouched graphite LG InstaView refrigerator'},
- {id:'washer',word:'washer',category:'home-appliances',image:'/hero/lg-washer-hero-v1.webp',alt:'AI-retouched graphite LG front-loading washing machine'},
- {id:'ac',word:'AC',category:'cooling',image:'/hero/ac-studio-v1.webp',alt:'AI-retouched white wall-mounted air conditioner'},
- {id:'audio',word:'sound system',category:'audio',image:'/hero/lg-audio-hero-v1.webp',alt:'AI-retouched LG subwoofer, soundbar and rear speakers'},
- {id:'phone',word:'phone',category:'phones-and-computing',image:'/hero/phone-studio-v1.webp',alt:'AI-retouched smartphone with a blue and teal screen'},
+ {id:'tv',word:'TV',category:'tv-and-entertainment',image:'/hero/lg-oled-hero-v1.webp',alt:'LG OLED television with magenta and blue screen artwork'},
+ {id:'fridge',word:'fridge',category:'home-appliances',image:'/hero/lg-fridge-hero-v1.webp',alt:'Graphite LG InstaView refrigerator'},
+ {id:'washer',word:'washer',category:'home-appliances',image:'/hero/lg-washer-hero-v1.webp',alt:'Graphite LG front-loading washing machine'},
+ {id:'ac',word:'AC',category:'cooling',image:'/hero/ac-studio-v1.webp',alt:'White wall-mounted air conditioner'},
+ {id:'audio',word:'sound system',category:'audio',image:'/hero/lg-audio-hero-v1.webp',alt:'LG subwoofer, soundbar and rear speakers'},
+ {id:'phone',word:'phone',category:'phones-and-computing',image:'/hero/phone-studio-v1.webp',alt:'Smartphone with a blue and teal screen'},
 ];
 
 export default function HeroCarousel(){
@@ -32,12 +32,11 @@ export default function HeroCarousel(){
    </Link>
    <div className="hero-navigation" aria-label="Featured product controls"><button type="button" className="hero-arrow" aria-label="Previous product" onClick={()=>change(-1)}><ChevronLeft size={18}/></button><div className="hero-selectors">{features.map((feature,index)=><button key={feature.id} type="button" className={active===index?'active':''} aria-label={`Show ${feature.word}`} aria-pressed={active===index} onClick={()=>setActive(index)}><span aria-hidden="true"/><span className="sell-hero-sr">{feature.word}</span></button>)}</div><button type="button" className="hero-arrow" aria-label="Next product" onClick={()=>change(1)}><ChevronRight size={18}/></button></div>
    <div className="hero-progress" key={`${slide.id}-${stopped}`} aria-hidden="true"><span style={{animationDuration:`${duration}ms`,animationPlayState:stopped?'paused':'running'}}/></div>
-   <div className="sell-hero-foot"><span>AI-retouched image · {active+1}/{features.length}</span><button type="button" aria-label={paused?'Resume changing products':'Pause changing products'} aria-pressed={paused} onClick={()=>setPaused(v=>!v)}>{paused?<Play size={12}/>:<Pause size={12}/>}</button></div>
+   <div className="sell-hero-foot"><span>{active+1}/{features.length}</span><button type="button" aria-label={paused?'Resume changing products':'Pause changing products'} aria-pressed={paused} onClick={()=>setPaused(v=>!v)}>{paused?<Play size={12}/>:<Pause size={12}/>}</button></div>
   </div>
   <div className="sell-hero-offer">
-   <p>Pay in full, or monthly.</p>
-   <div className="sell-hero-actions"><Link className="button dark" to="/shop">Shop now <ArrowUpRight size={18}/></Link><Link className="button outline" to="/hire-purchase">Pay monthly</Link></div>
-   <small>Monthly payments subject to approval.</small>
+   <p>Pay with MoMo or card.</p>
+   <div className="sell-hero-actions"><Link className="button dark" to="/shop">Shop now <ArrowUpRight size={18}/></Link></div>
   </div>
  </section>
 }

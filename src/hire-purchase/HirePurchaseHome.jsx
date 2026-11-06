@@ -4,7 +4,7 @@ import { ArrowUpRight, BadgeCheck, ClipboardCheck, CreditCard, FileText, IdCard,
 import { OfflineNote, useReveal } from '../components/shared';
 import { Link } from '../router';
 import { useCatalogue } from '../state';
-import { ProductCard } from '../retail/RetailHome';
+import HirePurchaseCard from './HirePurchaseCard';
 
 const STAGES = [
   { icon: ClipboardCheck, title: 'Apply', text: 'Create your account with Google or your email, then complete a short assessment. It saves as you go.' },
@@ -24,7 +24,6 @@ const FAQ = [
   ['Will I see my repayments before I commit?', 'Yes. Once approved, each purchase comes with a full agreement: the cash price, the total hire-purchase price, your deposit and every instalment with its due date. Nothing is final until you accept it.'],
   ['How long does a decision take?', 'Review times will be confirmed when applications open. You can check your status in your account at any time.'],
   ['What happens to my documents?', 'They are stored privately, seen only by the staff assessing your application, and kept only as long as our privacy policy allows.'],
-  ['Can I just buy outright instead?', 'Of course. Everything in the shop can be bought outright by anyone, no account needed.'],
 ];
 
 export default function HirePurchaseHome() {
@@ -74,8 +73,8 @@ export default function HirePurchaseHome() {
           <span className="muted small">Approved customers buy these through their account.</span>
         </div>
         <OfflineNote />
-        <div className="product-grid">
-          {eligible.map(p => <ProductCard key={p.id} product={p} to={`/hire-purchase/p/${p.slug}`} />)}
+        <div className="hp-card-grid">
+          {eligible.map(p => <HirePurchaseCard key={p.id} product={p} to={`/hire-purchase/p/${p.slug}`} />)}
         </div>
         {status === 'ready' && eligible.length === 0 && <p className="muted">No products are available on hire purchase yet.</p>}
       </section>

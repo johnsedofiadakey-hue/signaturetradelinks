@@ -2,6 +2,10 @@
 
 Owner approved the improvements following a storefront review. Owner confirmed there is **no confirmed price/stock list, warranty/delivery policy or genuine review material yet**. No business facts, customer quotes, prices, inventory or repayment terms were invented. No deployment or production data change in this update.
 
+**Superseded in part:** the hire-purchase link on cards, the monthly option on product pages and the hire-purchase wording were removed at the owner's request. See "The rule" in `planning/RETAIL_HP_SEPARATION.md`.
+
+The owner also asked that no AI-generated or AI-retouched labels appear anywhere on the site, so those labels were removed. "Illustrative photo" labels on placeholder products remain.
+
 Implemented:
 - Hero: six direct selectors, previous/next controls, progress line, five-second rotation, focus/visibility/offscreen pausing, keyboard navigation and reduced-motion support. Clean white product-led layout retained.
 - Cards: confirmed brand where present, availability label, one specification from the existing product-detail API (viewport-triggered and cached by the discovery provider), and a separate assessed hire-purchase link for eligible products. Unknown specifications remain labelled as unconfirmed.

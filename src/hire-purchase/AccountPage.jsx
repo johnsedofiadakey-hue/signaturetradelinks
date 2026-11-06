@@ -5,7 +5,7 @@ import { Link } from '../router';
 import { formatPrice } from '../services/catalogue';
 import { CustomerError, loadAgreements, loadApplication, loadBuying, restartApplication, signOutCustomer, withdrawApplication } from '../services/customer';
 import { useCatalogue } from '../state';
-import { ProductCard } from '../retail/RetailHome';
+import HirePurchaseCard from './HirePurchaseCard';
 import { ConfirmLinkEmail, SignIn, useCustomer } from './SignIn';
 
 const AGREEMENT_LABELS = { awaiting_deposit: 'Deposit due', active: 'Active', completed: 'Paid in full', cancelled: 'Ended' };
@@ -72,7 +72,7 @@ function Approved({ account }) {
       {eligible.length > 0 && (
         <section>
           <h2 className="hp-account-heading">Products you can choose from</h2>
-          <div className="product-grid">{eligible.map(product => <ProductCard key={product.id} product={product} to={buying?.open ? `/hire-purchase/buy/${product.slug}` : `/hire-purchase/p/${product.slug}`} />)}</div>
+          <div className="hp-card-grid">{eligible.map(product => <HirePurchaseCard key={product.id} product={product} action={buying?.open ? 'Buy this' : 'View details'} to={buying?.open ? `/hire-purchase/buy/${product.slug}` : `/hire-purchase/p/${product.slug}`} />)}</div>
         </section>
       )}
     </>

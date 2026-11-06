@@ -6,6 +6,14 @@ Status, 5 Nov 2026:
   - The admin "Where it is sold" section.
 - **Not built yet:** checkout and the hire-purchase application. Their pages show what each will ask for, say plainly that they are not open yet, and collect nothing.
 
+## The rule
+
+The owner has asked for this twice, so treat it as fixed: **the two stores stay separate.** `tests/store-separation.test.mjs` enforces it.
+
+- **Retail** goes straight to checkout, with no account. Retail pages never mention hire purchase, monthly payments, assessment or instalments: not on the hero, cards, product pages, FAQs or home page sections.
+- **Hire purchase** shows only products staff marked for it, on its own cards. Anyone can view them. Buying needs an assessment and an approved account. It has no cart, wishlist or links to retail product pages.
+- **The only crossings** are the "Hire purchase" link in the retail menu and footer, the help dialog, "Main shop" in the hire-purchase footer, and the shop link shown to a declined applicant.
+
 ## The idea
 
 Today both ways of buying share every surface: each product card carries two buttons, the product dialog has "Pay outright / Hire purchase" tabs, and hire purchase is a section on the retail home page. That makes hire purchase feel like a payment option bolted onto retail. It is not. Retail is a purchase anyone completes alone in minutes. Hire purchase is a relationship: the business assesses a person once, approves them for an amount, and that person then buys on credit through their account.
