@@ -86,7 +86,7 @@ function App() {
       <PreviewStrip />
       {hirePurchase ? <HirePurchaseHeader onHelp={openHelp} /> : <RetailHeader onHelp={openHelp} onBag={() => setBagOpen(true)} query={query} onQuery={onQuery} />}
       <Suspense fallback={<main className="section"><p className="muted">Loading…</p></main>}>{page}</Suspense>
-      <Footer onHelp={openHelp} showPayment={!hirePurchase} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : checkoutOpen ? '' : 'Design preview · Catalogue & policies awaiting confirmation'} />
+      <Footer onHelp={openHelp} hirePurchase={hirePurchase} note={hirePurchase ? 'Hire purchase is subject to assessment and approval' : checkoutOpen ? '' : 'Design preview · Catalogue & policies awaiting confirmation'} />
       <Toast />
       {help && <HelpDialog onClose={closeHelp} />}
       {bagOpen && <BagDialog onClose={closeBag} />}

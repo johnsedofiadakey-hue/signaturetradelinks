@@ -15,9 +15,8 @@ export default function ShoppableRoom() {
   const edit = edits[selected];
   const matches = products.filter(product => product.categorySlug === edit.category).slice(0, 2);
   return <section className="lifestyle-feature shoppable-room" aria-labelledby="lifestyle-title" data-reveal>
-    <div className="lifestyle-media"><img src="/editorial/living-room-v1.webp" alt="Illustrative living-room concept featuring a television, soundbar and subwoofer" loading="lazy" decoding="async"/>
+    <div className="lifestyle-media"><img src="/editorial/living-room-v1.webp" alt="Bright living room with a television, soundbar and subwoofer" loading="lazy" decoding="async"/>
       {Object.entries(edits).map(([key, item]) => <button key={key} className={`room-pin room-pin-${key} ${selected === key ? 'selected' : ''}`} aria-label={`Explore ${item.label.toLowerCase()} in this room`} aria-pressed={selected === key} aria-controls="room-selection" onClick={() => setSelected(key)}><Plus size={18}/><span>{item.label}</span></button>)}
-      <span className="editorial-label">AI-generated room concept · Products shown are illustrative</span>
     </div>
     <div className="lifestyle-copy"><span className="editorial-number">01 / SHOP THE ROOM</span><h2 id="lifestyle-title">Make a<br/>night of it.</h2><p>Tap a marker. Find your own setup.</p>
       <div className="room-tabs" role="group" aria-label="Explore room categories">{Object.entries(edits).map(([key, item]) => <button key={key} aria-pressed={selected === key} onClick={() => setSelected(key)}>{item.label}</button>)}</div>

@@ -36,11 +36,10 @@
 .footer-links { display: flex; gap: 22px; font-size: 12px; color: #5f6759; padding: 0 0 22px; }
 .footer-links a:hover { color: var(--ink); }
 
-/* Retail home: the single signpost to hire purchase */
-.hp-signpost { max-width: 1440px; margin: 0 auto; padding: 44px 6%; display: flex; align-items: center; justify-content: space-between; gap: 30px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.hp-signpost h2 { font-size: 26px; letter-spacing: -.8px; margin-bottom: 8px; }
-.hp-signpost p:not(.eyebrow) { font-size: 13px; color: var(--muted); margin: 0; max-width: 520px; }
-.hp-signpost .eyebrow { margin-bottom: 12px; }
+
+
+
+
 
 /* Product page (both stores) */
 .pdp { padding-top: 34px; }
@@ -63,8 +62,8 @@
 .stepper { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 4px; }
 .stepper button { display: grid; place-items: center; width: 40px; height: 100%; min-height: 46px; }
 .stepper span { min-width: 22px; text-align: center; font-size: 14px; }
-.hp-quiet { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-.hp-quiet a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
+
+
 .pdp-details { max-width: 760px; margin-top: 56px; }
 .pdp-details h2 { font-size: 18px; margin: 30px 0 14px; }
 .pdp-description { font-size: 15px; line-height: 1.75; color: #3d433d; }
@@ -101,8 +100,8 @@
 .store-hp { --orange: var(--gold); }
 .hp-header .hp-brand { display: flex; align-items: center; gap: 14px; }
 .hp-badge { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 600; color: var(--green); background: var(--gold-soft); border: 1px solid #eadcbd; border-radius: 20px; padding: 5px 10px; white-space: nowrap; }
-.hp-shop-link { font-size: 12px; color: var(--muted); }
-.hp-shop-link:hover { color: var(--ink); }
+
+
 .hp-hero { margin: 0 2.5%; background: var(--green); color: #fff; border-radius: 6px; padding: 64px 5%; display: grid; grid-template-columns: 1fr 1fr; gap: 7%; align-items: center; }
 .hp-hero .eyebrow { color: #d7c193; }
 .hp-hero h1 { font-size: clamp(40px, 4.6vw, 64px); line-height: 1.06; letter-spacing: -2.4px; font-weight: 600; margin-bottom: 22px; }
@@ -155,12 +154,12 @@
 @media (max-width: 1050px) {
   .needs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hp-hero { grid-template-columns: 1fr; gap: 30px; }
-  .hp-shop-link { display: none; }
+  
 }
 @media (max-width: 760px) {
   .pdp-grid, .checkout-grid, .apply-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .pdp-buy, .order-summary { position: static; }
-  .hp-signpost { flex-direction: column; align-items: flex-start; }
+  
   .hp-hero { margin: 0 3%; padding: 40px 6%; }
   .hp-trust { grid-template-columns: minmax(0, 1fr); }
   .needs-grid { grid-template-columns: minmax(0, 1fr); }
@@ -350,3 +349,21 @@
   p.hp-figures-inline { background: none; padding: 0; }
   .hp-buy-summary { display: none; }
 }
+
+/* The hire-purchase store looks like its own place: ivory ground, gold accents, its own product cards. */
+.store-hp { background: #f7f5ef; }
+.store-hp .header { background: #fff; border-bottom: 2px solid #d7c193; }
+.store-hp footer { background: #ece5d3; }
+.hp-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; margin-top: 30px; }
+.hp-card { display: flex; flex-direction: column; background: #fff; border: 1px solid #e4dcc8; border-radius: 6px; overflow: hidden; }
+.hp-card-image { position: relative; display: flex; align-items: center; justify-content: center; height: 210px; padding: 18px; background: #fbf9f3; overflow: hidden; }
+.hp-card-image img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.hp-card-image .media-label { position: absolute; left: 10px; bottom: 10px; }
+.hp-card-body { display: flex; flex-direction: column; flex: 1; gap: 6px; padding: 16px 18px 18px; border-top: 1px solid #efe9da; }
+.hp-card-category { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #8a6d33; font-weight: 600; }
+.hp-card-body h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--green); }
+.hp-card-body p { margin: 0; font-size: 13px; color: var(--muted); }
+.hp-card-action { display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 12px; font-size: 13px; font-weight: 600; color: var(--green); }
+.hp-card-action:hover { text-decoration: underline; }
+.pdp-add { margin: 10px 0 12px; }
+.pdp-actions .button { white-space: nowrap; }

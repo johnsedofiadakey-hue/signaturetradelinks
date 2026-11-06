@@ -16,10 +16,8 @@ export default function HirePurchaseProduct({ slug }) {
       <main className="section narrow-page">
         <p className="eyebrow">HIRE PURCHASE</p>
         <h1 className="page-title">{product.name} isn’t available on hire purchase.</h1>
-        <p className="muted">You can still buy it outright in the shop.</p>
         <div className="row-actions">
-          <Link className="button dark" to={`/p/${product.slug}`}>View in the shop <ArrowUpRight size={18} /></Link>
-          <Link className="button outline" to="/hire-purchase#eligible">See eligible products</Link>
+          <Link className="button dark" to="/hire-purchase#eligible">See eligible products <ArrowUpRight size={18} /></Link>
         </div>
       </main>
     );
@@ -49,7 +47,6 @@ export default function HirePurchaseProduct({ slug }) {
           </div>
           <Link className="button dark full" to={`/hire-purchase/apply?product=${encodeURIComponent(product.slug)}`}>Apply to get approved <ArrowUpRight size={18} /></Link>
           <p className="muted small">Already approved? <Link className="inline-link" to={`/hire-purchase/buy/${product.slug}`}>Buy through your account</Link>.</p>
-          <p className="muted small">Prefer to pay in full? <Link className="inline-link" to={`/p/${product.slug}`}>Buy it outright in the shop</Link>.</p>
         </div>
       </div>
       <ProductDetails description={description} specifications={specifications} detailStatus={detailStatus} />

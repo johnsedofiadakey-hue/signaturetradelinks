@@ -1,10 +1,9 @@
-// Retail product page: price, stock, variant and quantity, then the cart. Hire purchase is one quiet link at the end.
+// Retail product page: price, stock, variant and quantity, then straight to checkout or into the cart.
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Minus, Plus, ShoppingCart } from 'lucide-react';
-import { PaymentChoices } from '../components/ShoppingConfidence';
 import { SecureLine } from '../components/PaymentMethods';
 import { ProductImage, WishButton } from '../components/shared';
-import { Link } from '../router';
+import { Link, navigate } from '../router';
 import { formatPrice } from '../services/catalogue';
 import { useBag } from '../state';
 import { useProduct } from '../useProduct';
@@ -57,6 +56,8 @@ export default function ProductPage({ slug }) {
   const outOfStock = variant ? variant.availability === 'out_of_stock' : product.availability === 'out_of_stock';
   // Only a priced SKU can be checked out. Until staff price this product, it can be viewed but not bought.
   const unpriced = detailStatus !== 'loading' && variants.length === 0;
+  const buyable = !outOfStock && !needsChoice && !unpriced && detailStatus !== 'loading';
+  const addToBag = () => add(product, { sku: variant?.sku ?? null, price, quantity });
 
   return (
     <main className="pdp section">
@@ -74,7 +75,7 @@ export default function ProductPage({ slug }) {
           <p className="eyebrow">{product.category}{product.illustrative && ' · ILLUSTRATIVE PRODUCT'}</p>
           <h1 className="page-title">{product.name}</h1>
           {product.tag && <p className="muted">{product.tag}</p>}
-          <PaymentChoices product={product} price={price}/>
+          <p className="pdp-price">{formatPrice(price)}</p>
           <p className={`pdp-stock ${outOfStock ? 'out' : product.availability === 'in_stock' || variant ? '' : 'unconfirmed'}`}>
             {outOfStock ? 'Out of stock. Check back soon.' : (variant?.availability ?? product.availability) === 'in_stock' ? 'In stock' : 'Availability to be confirmed'}
           </p>
@@ -96,19 +97,16 @@ export default function ProductPage({ slug }) {
               <span aria-live="polite">{quantity}</span>
               <button type="button" onClick={() => setQuantity(q => Math.min(10, q + 1))} aria-label="One more"><Plus size={14} /></button>
             </div>
-            <button className="button dark grow" disabled={outOfStock || needsChoice || unpriced || detailStatus === 'loading'} onClick={() => add(product, { sku: variant?.sku ?? null, price, quantity })}>
-              {unpriced ? 'Not on sale yet' : needsChoice ? 'Choose an option' : 'Add to cart'} <ShoppingCart size={18} />
+            <button className="button dark grow" disabled={!buyable} onClick={() => { addToBag(); navigate('/checkout'); }}>
+              {unpriced ? 'Not on sale yet' : needsChoice ? 'Choose an option' : 'Buy now'} <ArrowUpRight size={18} />
             </button>
             <WishButton product={product} className="on-page" />
           </div>
+          <button className="button outline full pdp-add" disabled={!buyable} onClick={addToBag}>Add to cart <ShoppingCart size={18} /></button>
           <p className="muted small">Pay in full at checkout. Delivery or in-store collection is chosen there.</p>
           <SecureLine />
 
           <WhatsAppEnquiry product={product}/>
-
-          {product.hirePurchase && (
-            <p className="hp-quiet">Also available on hire purchase for approved customers. <Link to={`/hire-purchase/p/${product.slug}`}>See hire purchase</Link></p>
-          )}
         </div>
       </div>
       <ProductDetails description={description} specifications={specifications} detailStatus={detailStatus} />
